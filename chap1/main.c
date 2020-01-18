@@ -150,30 +150,37 @@ struct tree {
   T_tree left;
   string key;
   T_tree right;
+  void *binding;
 };
 
-T_tree Tree(T_tree l, string k, T_tree r) {
+T_tree Tree(T_tree l, string k, void *binding, T_tree r) {
   T_tree t = checked_malloc(sizeof(*t));
   t->left = l;
   t->key = k;
+  t->binding = binding;
   t->right = r;
   return t;
 }
 
-T_tree insert(string key, T_tree t) {
+T_tree insert(string key, void *binding, T_tree t) {
   if (t == NULL)
-    return Tree(NULL, key, NULL);
+    return Tree(NULL, key, binding, NULL);
   else if (strcmp(key, t->key) < 0)
-    return Tree(insert(key, t->left), t->key, t->right);
+    return Tree(insert(key, binding, t->left), t->key, t->binding, t->right);
   else if (strcmp(key, t->key) > 0)
-    return Tree(t->left, t->key, insert(key, t->right));
+    return Tree(t->left, t->key, t->binding, insert(key, binding, t->right));
   else
-    return Tree(t->left, key, t->right);
+    return Tree(t->left, key, binding, t->right);
 }
 
 T_tree createTree() {
-  return Tree(Tree(Tree(NULL, "aa", NULL), "ab", NULL), "bb",
-              Tree(NULL, "bc", Tree(NULL, "zz", NULL)));
+  T_tree t = NULL;
+  t = insert("aa", "aa binding", t);
+  t = insert("ab", "ab binding", t);
+  t = insert("bb", "bb binding", t);
+  t = insert("bc", "bc binding", t);
+  t = insert("zz", "zz binding", t);
+  return t;
 }
 
 bool member(string key, T_tree t) {
@@ -188,14 +195,29 @@ bool member(string key, T_tree t) {
     return true;
 }
 
+void *lookupTree(string key, T_tree t) {
+  if (!t)
+    return NULL;
+  int cmp = strcmp(key, t->key);
+  if (cmp > 0)
+    return lookupTree(key, t->right);
+  else if (cmp < 0)
+    return lookupTree(key, t->left);
+  else
+    return t->binding;
+}
+
 int main() {
   A_stm slpProgram = prog();
   printf("=== maxargs ===\n");
   printf("The max number of print args is %d.\n", maxargs(slpProgram));
+
   printf("=== interp ===\n");
   interp(slpProgram);
+
   printf("=== tree ===\n");
   T_tree tree = createTree();
+  // Testing member.
   assert(member("aa", tree));
   assert(member("ab", tree));
   assert(member("bb", tree));
@@ -205,5 +227,16 @@ int main() {
   assert(!member("az", tree));
   assert(!member("cb", tree));
   assert(!member("az", tree));
+  // Testing lookupTree.
+  assert(strcmp(lookupTree("aa", tree), "aa binding") == 0);
+  assert(strcmp(lookupTree("ab", tree), "ab binding") == 0);
+  assert(strcmp(lookupTree("bb", tree), "bb binding") == 0);
+  assert(strcmp(lookupTree("bc", tree), "bc binding") == 0);
+  assert(strcmp(lookupTree("zz", tree), "zz binding") == 0);
+  assert(lookupTree("za", tree) == NULL);
+  assert(lookupTree("az", tree) == NULL);
+  assert(lookupTree("cb", tree) == NULL);
+  assert(lookupTree("az", tree) == NULL);
+  printf("Success.\n");
   return 0;
 }
