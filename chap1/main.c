@@ -3,6 +3,105 @@
 #include "prog1.h"
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct table *Table_;
+struct table {
+  string id;
+  int value;
+  Table_ tail;
+};
+
+Table_ Table(string id, int value, struct table *tail) {
+  Table_ t = malloc(sizeof(*t));
+  t->id = id;
+  t->value = value;
+  t->tail = tail;
+  return t;
+}
+
+int lookup(Table_ t, string key) {
+  assert(t);
+  if (strcmp(t->id, key) == 0)
+    return t->value;
+  return lookup(t->tail, key);
+}
+
+Table_ interpStm(A_stm s, Table_ t);
+
+struct IntAndTable {
+  int i;
+  Table_ t;
+};
+struct IntAndTable interpExp(A_exp e, Table_ t);
+
+Table_ interpStm(A_stm s, Table_ t) {
+  switch (s->kind) {
+  case A_compoundStm: {
+    t = interpStm(s->u.compound.stm1, t);
+    t = interpStm(s->u.compound.stm2, t);
+    return t;
+  }
+  case A_assignStm: {
+    struct IntAndTable result = interpExp(s->u.assign.exp, t);
+    return Table(s->u.assign.id, result.i, result.t);
+  }
+  case A_printStm: {
+    A_expList current = s->u.print.exps;
+    for (; current->kind == A_pairExpList; current = current->u.pair.tail) {
+      struct IntAndTable it = interpExp(current->u.pair.head, t);
+      t = it.t;
+      printf("%d ", it.i);
+    }
+    struct IntAndTable it = interpExp(current->u.last, t);
+    t = it.t;
+    printf("%d\n", it.i);
+    return t;
+  }
+  }
+}
+
+struct IntAndTable interpExp(A_exp e, Table_ t) {
+  switch (e->kind) {
+  case A_idExp: {
+    struct IntAndTable it = {lookup(t, e->u.id), t};
+    return it;
+  }
+  case A_numExp: {
+    struct IntAndTable it = {e->u.num, t};
+    return it;
+  }
+  case A_opExp: {
+    struct IntAndTable lhs = interpExp(e->u.op.left, t);
+    t = lhs.t;
+    struct IntAndTable rhs = interpExp(e->u.op.right, t);
+    t = rhs.t;
+    int result;
+    switch (e->u.op.oper) {
+    case A_plus:
+      result = lhs.i + rhs.i;
+      break;
+    case A_minus:
+      result = lhs.i - rhs.i;
+      break;
+    case A_times:
+      result = lhs.i * rhs.i;
+      break;
+    case A_div:
+      result = lhs.i / rhs.i;
+      break;
+    }
+    struct IntAndTable it = {result, t};
+    return it;
+  }
+  case A_eseqExp:
+    t = interpStm(e->u.eseq.stm, t);
+    return interpExp(e->u.eseq.exp, t);
+  }
+}
+
+void interp(A_stm stm) { interpStm(stm, NULL); }
 
 int maxargs(A_stm stm);
 
@@ -46,6 +145,10 @@ int maxargs(A_stm stm) {
 }
 
 int main() {
-  printf("The max number of print args is %d.\n", maxargs(prog()));
+  A_stm slpProgram = prog();
+  printf("=== maxargs ===\n");
+  printf("The max number of print args is %d.\n", maxargs(slpProgram));
+  printf("=== interp ===\n");
+  interp(slpProgram);
   return 0;
 }
