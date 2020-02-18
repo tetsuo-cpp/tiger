@@ -19,12 +19,29 @@ void adjust(void)
  charPos+=yyleng;
 }
 
+#define MAX_STRING_LITERAL_LEN 1024
+char stringLiteral[MAX_STRING_LITERAL_LEN];
+size_t stringLiteralLen = 0;
+void stringLiteralPushChar(char c) {
+  assert(stringLiteralLen < MAX_STRING_LITERAL_LEN);
+  stringLiteral[stringLiteralLen++] = c;
+}
+void stringLiteralTerminate() {
+  stringLiteral[stringLiteralLen] = 0;
+  stringLiteralLen = 0;
+}
+
 %}
-%x COMMENT
+
+%x comment
+%x string
+digits [0-9]+
+id [a-zA-Z][a-zA-Z0-9_]*
+space [ \t\r]+
+
 %%
-" "	 {adjust(); continue;}
+{space}	 {adjust(); continue;}
 \n	 {adjust(); EM_newline(); continue;}
-\t	 {adjust(); continue;}
 ","	 {adjust(); return COMMA;}
 ":"	 {adjust(); return COLON;}
 ";"	 {adjust(); return SEMICOLON;}
@@ -39,8 +56,6 @@ void adjust(void)
 "-"	 {adjust(); return MINUS;}
 "*"	 {adjust(); return TIMES;}
 "/"	 {adjust(); return DIVIDE;}
-"/*"	 {adjust(); BEGIN COMMENT;}
-<COMMENT>"*/" {adjust(); BEGIN INITIAL;}
 "="	 {adjust(); return EQ;}
 "<>"	 {adjust(); return NEQ;}
 "<"	 {adjust(); return LT;}
@@ -67,7 +82,17 @@ else	 {adjust(); return ELSE;}
 do  	 {adjust(); return DO;}
 of  	 {adjust(); return OF;}
 nil  	 {adjust(); return NIL;}
-[0-9]+	 {adjust(); yylval.ival=atoi(yytext); return INT;}
-[a-zA-Z][a-zA-Z0-9_]* {adjust(); yylval.sval=String(yytext); return ID;}
+{digits} {adjust(); yylval.ival=atoi(yytext); return INT;}
+{id}	 {adjust(); yylval.sval=String(yytext); return ID;}
+"/*"	 {adjust(); BEGIN comment;}
+<comment>"*/" {adjust(); BEGIN INITIAL;}
+<comment>. {adjust(); continue;}
+"\""	 {adjust(); BEGIN string;}
+<string>"\\n" {adjust(); stringLiteralPushChar('\n');}
+<string>"\\t" {adjust(); stringLiteralPushChar('\t');}
+<string>"\\\"" {adjust(); stringLiteralPushChar('\"');}
+<string>"\\\\" {adjust(); stringLiteralPushChar('\\');}
+<string>"\\" {adjust(); EM_error(EM_tokPos,"illegal escape sequence");}
+<string>"\"" {adjust(); stringLiteralTerminate(); yylval.sval=String(stringLiteral); BEGIN INITIAL; return STRING;}
+<string>. {adjust(); stringLiteralPushChar(yytext[0]);}
 .	 {adjust(); EM_error(EM_tokPos,"illegal token");}
-<COMMENT>. {adjust();}
