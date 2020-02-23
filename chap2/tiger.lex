@@ -92,6 +92,7 @@ nil  	 {adjust(); return NIL;}
 <string>"\\t" {adjust(); stringLiteralPushChar('\t');}
 <string>"\\\"" {adjust(); stringLiteralPushChar('\"');}
 <string>"\\\\" {adjust(); stringLiteralPushChar('\\');}
+<string>"\\"{digits}{digits}{digits} {adjust(); stringLiteralPushChar(atoi(&yytext[1]));}
 <string>"\\" {adjust(); EM_error(EM_tokPos,"illegal escape sequence");}
 <string>"\"" {adjust(); stringLiteralTerminate(); yylval.sval=String(stringLiteral); BEGIN INITIAL; return STRING;}
 <string>. {adjust(); stringLiteralPushChar(yytext[0]);}
