@@ -21,23 +21,42 @@ void yyerror(char *s)
 %token <sval> ID STRING
 %token <ival> INT
 
-%token 
-  COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK 
-  LBRACE RBRACE DOT 
+%token
+  COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK
+  LBRACE RBRACE DOT
   PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE
   AND OR ASSIGN
-  ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF 
+  ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF
   BREAK NIL
-  FUNCTION VAR TYPE 
+  FUNCTION VAR TYPE
 
 %start program
 
 %%
 
 program:	exp
+        ;
 
-exp:   ID
+/* Everything in Tiger is an expression. */
+exp:            decl
+        ;
 
+/* Type declarations. */
+decl:           TYPE ID EQ type
+        ;
 
+/* The rhs of a type decl. */
+type:           ID
+        |       LBRACE fields RBRACE
+        |       ARRAY OF ID
+        ;
 
-	
+/* A series of type fields for when we declare a record. */
+fields:         ID COLON ID fields_rem
+        |
+        ;
+
+/* The remainder of the fields list must have be comma separated. */
+fields_rem:     COMMA ID COLON ID fields_rem
+        |
+        ;

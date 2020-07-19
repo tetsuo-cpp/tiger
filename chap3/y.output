@@ -1,42 +1,319 @@
+Terminals which are not used
+
+   STRING
+   INT
+   SEMICOLON
+   LPAREN
+   RPAREN
+   LBRACK
+   RBRACK
+   DOT
+   PLUS
+   MINUS
+   TIMES
+   DIVIDE
+   NEQ
+   LT
+   LE
+   GT
+   GE
+   AND
+   OR
+   ASSIGN
+   IF
+   THEN
+   ELSE
+   WHILE
+   FOR
+   TO
+   DO
+   LET
+   IN
+   END
+   BREAK
+   NIL
+   FUNCTION
+   VAR
+
+
+Grammar
+
+    0 $accept: program $end
+
+    1 program: exp
+
+    2 exp: decl
+
+    3 decl: TYPE ID EQ type
+
+    4 type: ID
+    5     | LBRACE fields RBRACE
+    6     | ARRAY OF ID
+
+    7 fields: ID COLON ID fields_rem
+    8       | /* empty */
+
+    9 fields_rem: COMMA ID COLON ID fields_rem
+   10           | /* empty */
+
+
+Terminals, with rules where they appear
+
+$end (0) 0
+error (256)
+ID (258) 3 4 6 7 9
+STRING (259)
+INT (260)
+COMMA (261) 9
+COLON (262) 7 9
+SEMICOLON (263)
+LPAREN (264)
+RPAREN (265)
+LBRACK (266)
+RBRACK (267)
+LBRACE (268) 5
+RBRACE (269) 5
+DOT (270)
+PLUS (271)
+MINUS (272)
+TIMES (273)
+DIVIDE (274)
+EQ (275) 3
+NEQ (276)
+LT (277)
+LE (278)
+GT (279)
+GE (280)
+AND (281)
+OR (282)
+ASSIGN (283)
+ARRAY (284) 6
+IF (285)
+THEN (286)
+ELSE (287)
+WHILE (288)
+FOR (289)
+TO (290)
+DO (291)
+LET (292)
+IN (293)
+END (294)
+OF (295) 6
+BREAK (296)
+NIL (297)
+FUNCTION (298)
+VAR (299)
+TYPE (300) 3
+
+
+Nonterminals, with rules where they appear
+
+$accept (46)
+    on left: 0
+program (47)
+    on left: 1, on right: 0
+exp (48)
+    on left: 2, on right: 1
+decl (49)
+    on left: 3, on right: 2
+type (50)
+    on left: 4 5 6, on right: 3
+fields (51)
+    on left: 7 8, on right: 5
+fields_rem (52)
+    on left: 9 10, on right: 7 9
+
 
 state 0
-	$accept : _program $end 
 
-	ID  shift 3
-	.  error
+    0 $accept: . program $end
 
-	program  goto 1
-	exp  goto 2
+    TYPE  shift, and go to state 1
+
+    program  go to state 2
+    exp      go to state 3
+    decl     go to state 4
+
 
 state 1
-	$accept :  program_$end 
 
-	$end  accept
-	.  error
+    3 decl: TYPE . ID EQ type
+
+    ID  shift, and go to state 5
 
 
 state 2
-	program :  exp_    (1)
 
-	.  reduce 1
+    0 $accept: program . $end
+
+    $end  shift, and go to state 6
 
 
 state 3
-	exp :  ID_    (2)
 
-	.  reduce 2
+    1 program: exp .
+
+    $default  reduce using rule 1 (program)
 
 
-45/3000 terminals, 2/1000 nonterminals
-3/2000 grammar rules, 4/5000 states
-0 shift/reduce, 0 reduce/reduce conflicts reported
-3/1400 working sets used
-memory: states,etc. 30/40000, parser 1/70000
-3/600 distinct lookahead sets
-0 extra closures
-1 shift entries, 1 exceptions
-2 goto entries
-0 entries saved by goto default
-Optimizer space used: input 6/40000, output 3/70000
-3 table entries, 0 zero
-maximum spread: 257, maximum offset: 257
+state 4
+
+    2 exp: decl .
+
+    $default  reduce using rule 2 (exp)
+
+
+state 5
+
+    3 decl: TYPE ID . EQ type
+
+    EQ  shift, and go to state 7
+
+
+state 6
+
+    0 $accept: program $end .
+
+    $default  accept
+
+
+state 7
+
+    3 decl: TYPE ID EQ . type
+
+    ID      shift, and go to state 8
+    LBRACE  shift, and go to state 9
+    ARRAY   shift, and go to state 10
+
+    type  go to state 11
+
+
+state 8
+
+    4 type: ID .
+
+    $default  reduce using rule 4 (type)
+
+
+state 9
+
+    5 type: LBRACE . fields RBRACE
+
+    ID  shift, and go to state 12
+
+    $default  reduce using rule 8 (fields)
+
+    fields  go to state 13
+
+
+state 10
+
+    6 type: ARRAY . OF ID
+
+    OF  shift, and go to state 14
+
+
+state 11
+
+    3 decl: TYPE ID EQ type .
+
+    $default  reduce using rule 3 (decl)
+
+
+state 12
+
+    7 fields: ID . COLON ID fields_rem
+
+    COLON  shift, and go to state 15
+
+
+state 13
+
+    5 type: LBRACE fields . RBRACE
+
+    RBRACE  shift, and go to state 16
+
+
+state 14
+
+    6 type: ARRAY OF . ID
+
+    ID  shift, and go to state 17
+
+
+state 15
+
+    7 fields: ID COLON . ID fields_rem
+
+    ID  shift, and go to state 18
+
+
+state 16
+
+    5 type: LBRACE fields RBRACE .
+
+    $default  reduce using rule 5 (type)
+
+
+state 17
+
+    6 type: ARRAY OF ID .
+
+    $default  reduce using rule 6 (type)
+
+
+state 18
+
+    7 fields: ID COLON ID . fields_rem
+
+    COMMA  shift, and go to state 19
+
+    $default  reduce using rule 10 (fields_rem)
+
+    fields_rem  go to state 20
+
+
+state 19
+
+    9 fields_rem: COMMA . ID COLON ID fields_rem
+
+    ID  shift, and go to state 21
+
+
+state 20
+
+    7 fields: ID COLON ID fields_rem .
+
+    $default  reduce using rule 7 (fields)
+
+
+state 21
+
+    9 fields_rem: COMMA ID . COLON ID fields_rem
+
+    COLON  shift, and go to state 22
+
+
+state 22
+
+    9 fields_rem: COMMA ID COLON . ID fields_rem
+
+    ID  shift, and go to state 23
+
+
+state 23
+
+    9 fields_rem: COMMA ID COLON ID . fields_rem
+
+    COMMA  shift, and go to state 19
+
+    $default  reduce using rule 10 (fields_rem)
+
+    fields_rem  go to state 24
+
+
+state 24
+
+    9 fields_rem: COMMA ID COLON ID fields_rem .
+
+    $default  reduce using rule 9 (fields_rem)
