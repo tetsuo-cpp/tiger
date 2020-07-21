@@ -38,12 +38,53 @@ program:	exp
         ;
 
 /* Everything in Tiger is an expression. */
-exp:            decl
+exp:            let
+        |       lvalue
+        |       lvalue ASSIGN exp
+        |       LPAREN exp_list RPAREN
+        |       NIL
+        |       INT
+        |       STRING
+                /* FIXME: This is causing lots of shift/reduce. */
+        |       exp PLUS exp
+        |       exp MINUS exp
+        |       exp TIMES exp
+        |       exp DIVIDE exp
+        |       exp EQ exp
+        |       exp NEQ exp
+        |       exp LT exp
+        |       exp GT exp
+        |       exp LT EQ exp
+        |       exp GT EQ exp
+        |       exp AND exp
+        |       exp OR exp
+        |       ID LBRACE record_args RBRACE
+        |       ID LBRACK exp RBRACK OF exp
+        |       if_exp
+        |       WHILE exp DO exp
+        |       FOR ID ASSIGN exp TO exp DO exp
+        |       BREAK
+        ;
+
+/* Let expression. */
+let:            LET decl_list IN exp_list
+        ;
+
+decl_list:      decl decl_list
+        |
+        ;
+
+exp_list:       exp_list SEMICOLON exp
+        |       exp
+        ;
+
+decl:           type_decl
+        |       var_decl
+        |       function_decl
         ;
 
 /* Type declarations. */
-decl:           TYPE ID EQ type
-        ;
+type_decl:      TYPE ID EQ type
 
 /* The rhs of a type decl. */
 type:           ID
@@ -52,11 +93,36 @@ type:           ID
         ;
 
 /* A series of type fields for when we declare a record. */
-fields:         ID COLON ID fields_rem
-        |
+fields:         fields COMMA ID COLON ID
+        |       ID COLON ID
         ;
 
-/* The remainder of the fields list must have be comma separated. */
-fields_rem:     COMMA ID COLON ID fields_rem
+/* Variable declaration. */
+var_decl:       VAR ID ASSIGN exp
+        |       VAR ID COLON ID ASSIGN exp
+        ;
+
+/* Function declaration. */
+function_decl:  FUNCTION ID LPAREN function_args RPAREN COLON ID
+        ;
+
+/* Function arguments. */
+function_args:  function_args COMMA ID COLON ID
+        |       COMMA ID COLON ID
+        ;
+
+lvalue:         ID
+        |       lvalue DOT ID
+        |       lvalue LBRACK exp RBRACK
+        ;
+
+record_args:    record_args COMMA ID EQ exp
+        |       ID EQ exp
+        ;
+
+if_exp:         IF exp THEN exp else_exp
+        ;
+
+else_exp:       ELSE exp
         |
         ;
