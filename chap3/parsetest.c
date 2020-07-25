@@ -3,6 +3,7 @@
 #include "errormsg.h"
 
 extern int yyparse(void);
+extern int yydebug;
 
 void parse(string fname) {
   EM_reset(fname);
@@ -13,6 +14,7 @@ void parse(string fname) {
 }
 
 int main(int argc, char **argv) {
+  yydebug = 1;
   if (argc != 2) {
     fprintf(stderr, "usage: a.out filename\n");
     exit(1);

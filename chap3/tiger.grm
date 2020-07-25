@@ -30,6 +30,16 @@ void yyerror(char *s)
   BREAK NIL
   FUNCTION VAR TYPE
 
+%right ASSIGN
+%left AND OR
+%nonassoc EQ NEQ LT LE GT GE
+%left PLUS MINUS
+%left TIMES DIVIDE
+%right UMINUS
+%right THEN ELSE DO OF
+
+%debug
+
 %start program
 
 %%
@@ -45,7 +55,7 @@ exp:            let
         |       NIL
         |       INT
         |       STRING
-                /* FIXME: This is causing lots of shift/reduce. */
+        |       MINUS exp %prec UMINUS
         |       exp PLUS exp
         |       exp MINUS exp
         |       exp TIMES exp
@@ -54,8 +64,8 @@ exp:            let
         |       exp NEQ exp
         |       exp LT exp
         |       exp GT exp
-        |       exp LT EQ exp
-        |       exp GT EQ exp
+        |       exp LE exp
+        |       exp GE exp
         |       exp AND exp
         |       exp OR exp
         |       ID LBRACE record_args RBRACE
@@ -64,17 +74,18 @@ exp:            let
         |       WHILE exp DO exp
         |       FOR ID ASSIGN exp TO exp DO exp
         |       BREAK
+        |       function_call
         ;
 
 /* Let expression. */
-let:            LET decl_list IN exp_list
+let:            LET decl_list IN exp_list END
         ;
 
 decl_list:      decl decl_list
         |
         ;
 
-exp_list:       exp_list SEMICOLON exp
+exp_list:       exp SEMICOLON exp_list
         |       exp
         ;
 
@@ -93,7 +104,7 @@ type:           ID
         ;
 
 /* A series of type fields for when we declare a record. */
-fields:         fields COMMA ID COLON ID
+fields:         ID COLON ID COMMA fields
         |       ID COLON ID
         ;
 
@@ -103,26 +114,42 @@ var_decl:       VAR ID ASSIGN exp
         ;
 
 /* Function declaration. */
-function_decl:  FUNCTION ID LPAREN function_args RPAREN COLON ID
+function_decl:  FUNCTION ID LPAREN function_args RPAREN COLON ID EQ exp
+        |       FUNCTION ID LPAREN function_args RPAREN EQ exp
+        ;
+
+function_args:  function_args_list
+        |
         ;
 
 /* Function arguments. */
-function_args:  function_args COMMA ID COLON ID
-        |       COMMA ID COLON ID
+function_args_list:
+                ID COLON ID COMMA function_args_list
+        |       ID COLON ID
         ;
 
 lvalue:         ID
-        |       lvalue DOT ID
-        |       lvalue LBRACK exp RBRACK
+        |       lvalue_not_id
         ;
 
-record_args:    record_args COMMA ID EQ exp
+lvalue_not_id:  lvalue DOT ID
+        |       ID LBRACK exp RBRACK
+        |       lvalue_not_id LBRACK exp RBRACK
+        ;
+
+record_args:    ID EQ exp COMMA record_args
         |       ID EQ exp
         ;
 
-if_exp:         IF exp THEN exp else_exp
+if_exp:         IF exp THEN exp
+        |       IF exp THEN exp ELSE exp
         ;
 
-else_exp:       ELSE exp
-        |
+function_call:  ID LPAREN function_call_args RPAREN
+        |       ID LPAREN RPAREN
+        ;
+
+function_call_args:
+                exp COMMA function_call_args
+        |       exp
         ;
