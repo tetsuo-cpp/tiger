@@ -1,7 +1,7 @@
 %{
 #include <stdio.h>
 #include "util.h"
-#include "symbol.h" 
+#include "symbol.h"
 #include "errormsg.h"
 #include "absyn.h"
 
@@ -28,26 +28,169 @@ void yyerror(char *s)
 %token <sval> ID STRING
 %token <ival> INT
 
-%token 
-  COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK 
-  LBRACE RBRACE DOT 
+%token
+  COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK
+  LBRACE RBRACE DOT
   PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE
   AND OR ASSIGN
-  ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF 
+  ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF
   BREAK NIL
-  FUNCTION VAR TYPE 
+  FUNCTION VAR TYPE
 
-%type <exp> exp program
+%right ASSIGN
+%left AND OR
+%nonassoc EQ NEQ LT LE GT GE
+%left PLUS MINUS
+%left TIMES DIVIDE
+%right UMINUS
+%right THEN ELSE DO OF
+
+%type   <exp>           exp program lvalue
 /* et cetera */
+
+%debug
 
 %start program
 
 %%
 
-program:   exp    {absyn_root=$1;}
+program:	exp {absyn_root=$1;}
+        ;
 
-exp:   ID         {$$=A_VarExp(EM_tokPos,A_SimpleVar(EM_tokPos,S_Symbol($1)));}
+/* Everything in Tiger is an expression. */
+exp:            let
+        |       lvalue
+        |       lvalue ASSIGN exp
+        |       LPAREN exp_list RPAREN
+        |       NIL
+        |       INT
+        |       STRING
+        |       MINUS exp %prec UMINUS
+        |       bin_op
+        |       record
+        |       array
+        |       if_exp
+        |       while_loop
+        |       for_loop
+        |       BREAK
+        |       function_call
+        ;
 
+/* Let expression. */
+let:            LET decl_list IN exp_list END
+        ;
 
+/* List of declarations. */
+decl_list:      decl decl_list
+        |       error decl_list /* If we see a bad decl, keep parsing. */
+        |
+        ;
 
-	
+/* List of expressions to execute. */
+exp_list:       exp SEMICOLON exp_list
+        |       error SEMICOLON exp_list /* If we see a bad expr, keep parsing. */
+        |       exp /* Terminating. */
+        ;
+
+/* Declaration types. */
+decl:           type_decl /* Type declaration. */
+        |       var_decl /* Variable declaration. */
+        |       function_decl /* Function declaration. */
+        ;
+
+/* Type declaration. */
+type_decl:      TYPE ID EQ type_id
+
+/* The rhs of a type decl. */
+type_id:        ID
+        |       LBRACE fields RBRACE
+        |       ARRAY OF ID
+        ;
+
+/* A series of type fields for when we declare a record. */
+fields:         ID COLON ID COMMA fields
+        |       ID COLON ID
+        ;
+
+/* Variable declaration. */
+var_decl:       VAR ID ASSIGN exp
+        |       VAR ID COLON ID ASSIGN exp
+        ;
+
+/* Function declaration. */
+function_decl:  FUNCTION ID LPAREN function_args RPAREN COLON ID EQ exp
+        |       FUNCTION ID LPAREN function_args RPAREN EQ exp /* No return type. */
+        ;
+
+/* Function arguments within a declaration. Can either be a list or empty. */
+function_args:  function_args_list
+        |
+        ;
+
+/* List of function arguments. */
+function_args_list:
+                ID COLON ID COMMA function_args_list
+        |       ID COLON ID
+        ;
+
+/* LValue. */
+lvalue:         ID {$$=A_VarExp(EM_tokPos,A_SimpleVar(EM_tokPos,S_Symbol($1)));}
+        |       lvalue_not_id
+        ;
+
+/* Some hackiness to remove shift/reduce conflicts. */
+lvalue_not_id:  lvalue DOT ID /* Record member access. */
+        |       ID LBRACK exp RBRACK /* Array access. */
+        |       lvalue_not_id LBRACK exp RBRACK
+        ;
+
+/* Binary operators. */
+bin_op:         exp PLUS exp
+        |       exp MINUS exp
+        |       exp TIMES exp
+        |       exp DIVIDE exp
+        |       exp EQ exp
+        |       exp NEQ exp
+        |       exp LT exp
+        |       exp GT exp
+        |       exp LE exp
+        |       exp GE exp
+        |       exp AND exp
+        |       exp OR exp
+        ;
+
+/* Record creation. */
+record:         ID LBRACE record_args RBRACE
+        ;
+
+/* Arguments for record creation. */
+record_args:    ID EQ exp COMMA record_args
+        |       ID EQ exp
+        ;
+
+/* Array creation. */
+array:          ID LBRACK exp RBRACK OF exp
+
+/* If-Then-Else expression . */
+if_exp:         IF exp THEN exp
+        |       IF exp THEN exp ELSE exp
+        ;
+
+/* While-Do loop. */
+while_loop:     WHILE exp DO exp
+        ;
+
+/* For-To loop. */
+for_loop:       FOR ID ASSIGN exp TO exp DO exp
+        ;
+
+/* Function call. */
+function_call:  ID LPAREN function_call_args RPAREN /* With arguments. */
+        |       ID LPAREN RPAREN /* Without arguments. */
+        ;
+
+/* List of function call arguments. */
+function_call_args:
+                exp COMMA function_call_args
+        |       exp
+        ;
