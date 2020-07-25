@@ -82,10 +82,12 @@ let:            LET decl_list IN exp_list END
         ;
 
 decl_list:      decl decl_list
+        |       error decl_list
         |
         ;
 
 exp_list:       exp SEMICOLON exp_list
+        |       error SEMICOLON exp_list
         |       exp
         ;
 
