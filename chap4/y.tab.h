@@ -143,10 +143,14 @@ typedef union YYSTYPE
 	string sval;
 	A_var var;
 	A_exp exp;
+        A_dec dec;
+        A_decList declList;
+        A_expList expList;
+        A_efieldList efieldList;
 	/* et cetera */
 	}
 /* Line 1529 of yacc.c.  */
-#line 150 "y.tab.h"
+#line 154 "y.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
