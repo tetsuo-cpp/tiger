@@ -38,4 +38,4 @@ table.o: table.c table.h util.h
 	cc -g -c table.c
 
 clean:
-	rm -f a.out util.o parsetest.o lex.yy.o errormsg.o y.tab.c y.tab.h y.tab.o absyn.o symbol.o table.o
+	rm -f a.out util.o parsetest.o lex.yy.o errormsg.o y.tab.c y.tab.h y.tab.o absyn.o symbol.o table.o prabsyn.o
