@@ -1,5 +1,5 @@
-a.out: parsetest.o y.tab.o lex.yy.o errormsg.o util.o absyn.o symbol.o table.o prabsyn.o types.o
-	cc -g parsetest.o y.tab.o lex.yy.o errormsg.o util.o absyn.o symbol.o table.o prabsyn.o types.o
+a.out: parsetest.o y.tab.o lex.yy.o errormsg.o util.o absyn.o symbol.o table.o prabsyn.o types.o semant.o
+	cc -g parsetest.o y.tab.o lex.yy.o errormsg.o util.o absyn.o symbol.o table.o prabsyn.o types.o semant.o
 
 parsetest.o: parsetest.c errormsg.h util.h
 	cc -g -c parsetest.c
@@ -40,5 +40,8 @@ table.o: table.c table.h util.h
 types.o: types.c types.h util.h symbol.h
 	cc -g -c types.c
 
+semant.o: semant.c semant.h
+	cc -g -c semant.c
+
 clean:
-	rm -f a.out util.o parsetest.o lex.yy.o errormsg.o y.tab.c y.tab.h y.tab.o absyn.o symbol.o table.o prabsyn.o types.o
+	rm -f a.out util.o parsetest.o lex.yy.o errormsg.o y.tab.c y.tab.h y.tab.o absyn.o symbol.o table.o prabsyn.o types.o semant.o
