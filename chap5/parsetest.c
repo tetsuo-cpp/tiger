@@ -4,6 +4,7 @@
 #include "symbol.h"
 #include "absyn.h"
 #include "prabsyn.h"
+#include "semant.h"
 
 extern int yyparse(void);
 extern int yydebug;
@@ -17,6 +18,7 @@ void parse(string fname) {
     fprintf(stderr, "Parsing failed\n");
   fprintf(stdout, "Abstract Syntax Tree:\n");
   pr_exp(stdout, absyn_root, 0);
+  SEM_transProg(absyn_root);
 }
 
 int main(int argc, char **argv) {
