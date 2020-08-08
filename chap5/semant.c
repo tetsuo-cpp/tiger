@@ -50,10 +50,37 @@ struct expty transVar(S_table venv, S_table tenv, A_var v) {
       return expTy(NULL, Ty_Int());
     }
   }
-  case A_fieldVar:
-    break;
-  case A_subscriptVar:
-    break;
+  case A_fieldVar: {
+    struct expty recordType = transVar(venv, tenv, v->u.field.var);
+    if (!recordType.ty || recordType.ty->kind != Ty_record) {
+      EM_error(v->pos, "variable is not a record");
+      return expTy(NULL, Ty_Int());
+    }
+    // Now let's try to find a field with the right name.
+    Ty_fieldList fields = recordType.ty->u.record;
+    S_symbol desiredField = v->u.field.sym;
+    while (fields) {
+      if (desiredField == fields->head->name)
+        return expTy(NULL, fields->head->ty);
+      fields = fields->tail;
+    }
+    EM_error(v->pos, "could not find a field with name %s", desiredField);
+    return expTy(NULL, Ty_Int());
+  }
+  case A_subscriptVar: {
+    struct expty arrayType = transVar(venv, tenv, v->u.subscript.var);
+    if (!arrayType.ty || arrayType.ty->kind != Ty_array) {
+      EM_error(v->pos, "subscript operator used on non-array type");
+      return expTy(NULL, Ty_Int());
+    }
+    struct expty indexType = transExp(venv, tenv, v->u.subscript.exp);
+    if (!indexType.ty || indexType.ty->kind != Ty_int) {
+      EM_error(v->pos, "subscript operator used with non-integer index");
+      return expTy(NULL, Ty_Int());
+    }
+    // Now evaluate to the array type.
+    return expTy(NULL, arrayType.ty->u.array);
+  }
   }
 }
 
@@ -81,14 +108,25 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     A_expList args = a->u.call.args;
     Ty_tyList desiredTypes = func->u.fun.formals;
     while (args) {
+      if (!desiredTypes) {
+        EM_error(a->pos, "function %s called with too many arguments",
+                 a->u.call.func);
+        return expTy(NULL, Ty_Void());
+      }
       struct expty argType = transExp(venv, tenv, args->head);
       Ty_ty desiredType = actual_ty(desiredTypes->head);
       if (argType.ty != desiredType) {
-        EM_error(a->pos, "mismatching type to function call");
+        EM_error(a->pos, "mismatching type to function call %s",
+                 a->u.call.func);
         return expTy(NULL, Ty_Void());
       }
       args = args->tail;
       desiredTypes = desiredTypes->tail;
+    }
+    if (desiredTypes) {
+      EM_error(a->pos, "function %s called with not enough arguments",
+               a->u.call.func);
+      return expTy(NULL, Ty_Void());
     }
     return expTy(NULL, func->u.fun.result);
   }
@@ -102,8 +140,10 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
       if (right.ty->kind != Ty_int)
         EM_error(a->u.op.right->pos, "integer required");
       return expTy(NULL, Ty_Int());
+    } else {
+      EM_error(a->pos, "unknown oper");
+      return expTy(NULL, Ty_Int());
     }
-    break;
   }
   case A_recordExp: {
     Ty_ty recordType = S_look(tenv, a->u.record.typ);
@@ -113,16 +153,72 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     }
     return expTy(NULL, recordType);
   }
-  case A_seqExp:
-    break;
-  case A_assignExp:
-    break;
-  case A_ifExp:
-    break;
-  case A_whileExp:
-    break;
-  case A_forExp:
-    break;
+  case A_seqExp: {
+    A_expList currentExp = a->u.seq;
+    struct expty currentExpType;
+    while (currentExp) {
+      currentExpType = transExp(venv, tenv, currentExp->head);
+      currentExp = currentExp->tail;
+    }
+    return expTy(NULL, currentExpType.ty);
+  }
+  case A_assignExp: {
+    // Check that the types match up.
+    struct expty lhs = transVar(venv, tenv, a->u.assign.var);
+    struct expty rhs = transExp(venv, tenv, a->u.assign.exp);
+    if (lhs.ty != rhs.ty)
+      EM_error(a->pos, "type error in assignment");
+    // Assignments don't evaluate to anything.
+    return expTy(NULL, Ty_Void());
+  }
+  case A_ifExp: {
+    struct expty condType = transExp(venv, tenv, a->u.iff.test);
+    if (condType.ty->kind != Ty_int) {
+      EM_error(a->pos, "if condition evaluates to non-integer value");
+      return expTy(NULL, Ty_Void());
+    }
+    struct expty thenType = transExp(venv, tenv, a->u.iff.then);
+    // If there is no else clause, then clause can't evaluate to a type.
+    if (!a->u.iff.elsee) {
+      if (thenType.ty->kind != Ty_void)
+        EM_error(a->pos, "if expression with else block has a then block "
+                         "returning non-void");
+    } else {
+      struct expty elseType = transExp(venv, tenv, a->u.iff.elsee);
+      if (thenType.ty != elseType.ty)
+        EM_error(a->pos, "if expression has then and else blocks that evaluate "
+                         "to different types");
+      else
+        return expTy(NULL, thenType.ty);
+    }
+    return expTy(NULL, Ty_Void());
+  }
+  case A_whileExp: {
+    struct expty condType = transExp(venv, tenv, a->u.whilee.test);
+    if (condType.ty->kind != Ty_int) {
+      EM_error(a->pos, "while condition evaluates to non-integer value");
+      return expTy(NULL, Ty_Void());
+    }
+    struct expty bodyType = transExp(venv, tenv, a->u.whilee.body);
+    if (bodyType.ty->kind != Ty_void)
+      EM_error(a->pos, "while expression contains a non-void body expression");
+    return expTy(NULL, Ty_Void());
+  }
+  case A_forExp: {
+    S_beginScope(venv);
+    S_enter(venv, a->u.forr.var, E_VarEntry(Ty_Int()));
+    struct expty lowType = transExp(venv, tenv, a->u.forr.lo);
+    if (lowType.ty->kind != Ty_int)
+      EM_error(a->pos, "lower bound of for expression has non-integer type");
+    struct expty highType = transExp(venv, tenv, a->u.forr.hi);
+    if (highType.ty->kind != Ty_int)
+      EM_error(a->pos, "upper bound of for expression has non-integer type");
+    struct expty bodyType = transExp(venv, tenv, a->u.forr.body);
+    if (bodyType.ty->kind != Ty_void)
+      EM_error(a->pos, "body of for expression has non-void type");
+    S_endScope(venv);
+    return expTy(NULL, Ty_Void());
+  }
   case A_breakExp: {
     // Check that we're nested within a loop here.
     return expTy(NULL, Ty_Void());
@@ -153,7 +249,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     }
     // Check that size evaluates to an integer.
     struct expty sizeType = transExp(venv, tenv, a->u.array.size);
-    if (sizeType.ty != Ty_Int()) {
+    if (sizeType.ty->kind != Ty_int) {
       EM_error(a->pos, "array size is not an integer");
       return expTy(NULL, Ty_Array(arrayType));
     }
