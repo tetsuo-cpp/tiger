@@ -23,12 +23,15 @@ void yyerror(char *s)
 	A_var var;
 	A_exp exp;
         A_dec dec;
+        A_ty ty;
         A_fundec fundec;
+        A_namety nameTy;
         A_decList declList;
         A_expList expList;
         A_efieldList efieldList;
         A_fundecList fundecList;
         A_fieldList fieldList;
+        A_nametyList nameTyList;
 	/* et cetera */
 	}
 
@@ -53,13 +56,16 @@ void yyerror(char *s)
 %right THEN ELSE DO OF
 
 %type   <exp>           exp program bin_op let if_exp record array while_loop for_loop function_call
-%type   <dec>           decl type_decl var_decl
+%type   <dec>           decl var_decl
+%type   <ty>            type_id
 %type   <fundec>        function_decl
+%type   <nameTy>        type_decl
 %type   <declList>      decl_list
-%type   <expList>       exp_list function_call_args
+%type   <expList>       exp_list exp_list_empty function_call_args
 %type   <efieldList>    record_args
 %type   <fundecList>    function_decl_list
-%type   <fieldList>     function_args function_args_list
+%type   <nameTyList>    type_decl_list
+%type   <fieldList>     function_args function_args_list fields
 %type   <var>           lvalue lvalue_not_id
 /* et cetera */
 
@@ -76,7 +82,7 @@ program:	exp {absyn_root=$1;}
 exp:            let
         |       lvalue {$$=A_VarExp(EM_tokPos,$1);}
         |       lvalue ASSIGN exp {$$=A_AssignExp(EM_tokPos,$1,$3);}
-        |       LPAREN exp_list RPAREN {$$=A_SeqExp(EM_tokPos,$2);}
+        |       LPAREN exp_list_empty RPAREN {$$=A_SeqExp(EM_tokPos,$2);}
         |       NIL {$$=A_NilExp(EM_tokPos);}
         |       INT {$$=A_IntExp(EM_tokPos,$1);}
         |       STRING {$$=A_StringExp(EM_tokPos,$1);}
@@ -101,6 +107,10 @@ decl_list:      decl decl_list {$$=A_DecList($1,$2);}
         | {$$=NULL;}
         ;
 
+exp_list_empty: exp_list
+        | {$$=NULL;}
+        ;
+
 /* List of expressions to execute. */
 exp_list:       exp SEMICOLON exp_list {$$=A_ExpList($1,$3);}
         |       error SEMICOLON exp_list /* If we see a bad expr, keep parsing. */ {$$=$3;}
@@ -108,23 +118,27 @@ exp_list:       exp SEMICOLON exp_list {$$=A_ExpList($1,$3);}
         ;
 
 /* Declaration types. */
-decl:           type_decl /* Type declaration. */
+decl:           type_decl_list /* Type declaration. */ {$$=A_TypeDec(EM_tokPos,$1);}
         |       var_decl /* Variable declaration. */
         |       function_decl_list /* Function declaration. */ {$$=A_FunctionDec(EM_tokPos,$1);}
         ;
 
+type_decl_list:
+                type_decl type_decl_list {$$=A_NametyList($1,$2);}
+        |       type_decl {$$=A_NametyList($1,NULL);}
+
 /* Type declaration. */
-type_decl:      TYPE ID EQ type_id {$$=A_TypeDec(EM_tokPos,NULL);} /* TODO: Figure this out. */
+type_decl:      TYPE ID EQ type_id {$$=A_Namety(S_Symbol($2),$4);}
 
 /* The rhs of a type decl. */
-type_id:        ID
-        |       LBRACE fields RBRACE
-        |       ARRAY OF ID
+type_id:        ID {$$=A_NameTy(EM_tokPos,S_Symbol($1));}
+        |       LBRACE fields RBRACE {$$=A_RecordTy(EM_tokPos,$2);}
+        |       ARRAY OF ID {$$=A_ArrayTy(EM_tokPos,S_Symbol($3));}
         ;
 
 /* A series of type fields for when we declare a record. */
-fields:         ID COLON ID COMMA fields
-        |       ID COLON ID
+fields:         ID COLON ID COMMA fields {$$=A_FieldList(A_Field(EM_tokPos,S_Symbol($1),S_Symbol($3)),$5);}
+        |       ID COLON ID {$$=A_FieldList(A_Field(EM_tokPos,S_Symbol($1),S_Symbol($3)),NULL);}
         ;
 
 /* Variable declaration. */
@@ -205,7 +219,7 @@ record_args:    ID EQ exp COMMA record_args {$$=A_EfieldList(A_Efield(S_Symbol($
 array:          ID LBRACK exp RBRACK OF exp {$$=A_ArrayExp(EM_tokPos,S_Symbol($1),$3,$6);}
 
 /* If-Then-Else expression . */
-if_exp:         IF exp THEN exp {$$=A_IfExp(EM_tokPos,$2,$4,A_IntExp(EM_tokPos,0));}
+if_exp:         IF exp THEN exp {$$=A_IfExp(EM_tokPos,$2,$4,NULL);}
         |       IF exp THEN exp ELSE exp {$$=A_IfExp(EM_tokPos,$2,$4,$6);}
         ;
 

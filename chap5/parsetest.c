@@ -17,8 +17,10 @@ void parse(string fname) {
   else
     fprintf(stderr, "Parsing failed\n");
   fprintf(stdout, "Abstract Syntax Tree:\n");
-  pr_exp(stdout, absyn_root, 0);
-  SEM_transProg(absyn_root);
+  if (absyn_root) {
+    pr_exp(stdout, absyn_root, 0);
+    SEM_transProg(absyn_root);
+  }
 }
 
 int main(int argc, char **argv) {

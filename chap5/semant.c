@@ -64,7 +64,8 @@ struct expty transVar(S_table venv, S_table tenv, A_var v) {
         return expTy(NULL, fields->head->ty);
       fields = fields->tail;
     }
-    EM_error(v->pos, "could not find a field with name %s", desiredField);
+    EM_error(v->pos, "could not find a field with name %s",
+             S_name(desiredField));
     return expTy(NULL, Ty_Int());
   }
   case A_subscriptVar: {
@@ -101,7 +102,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
   case A_callExp: {
     E_enventry func = S_look(venv, a->u.call.func);
     if (!func || func->kind != E_funEntry) {
-      EM_error(a->pos, "undefined function %s", a->u.call.func);
+      EM_error(a->pos, "undefined function %s", S_name(a->u.call.func));
       return expTy(NULL, Ty_Void()); // What to do here?
     }
     // Check arguments here.
@@ -110,14 +111,14 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     while (args) {
       if (!desiredTypes) {
         EM_error(a->pos, "function %s called with too many arguments",
-                 a->u.call.func);
+                 S_name(a->u.call.func));
         return expTy(NULL, Ty_Void());
       }
       struct expty argType = transExp(venv, tenv, args->head);
       Ty_ty desiredType = actual_ty(desiredTypes->head);
       if (argType.ty != desiredType) {
         EM_error(a->pos, "mismatching type to function call %s",
-                 a->u.call.func);
+                 S_name(a->u.call.func));
         return expTy(NULL, Ty_Void());
       }
       args = args->tail;
@@ -125,7 +126,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     }
     if (desiredTypes) {
       EM_error(a->pos, "function %s called with not enough arguments",
-               a->u.call.func);
+               S_name(a->u.call.func));
       return expTy(NULL, Ty_Void());
     }
     return expTy(NULL, func->u.fun.result);
@@ -134,13 +135,24 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     A_oper oper = a->u.op.oper;
     struct expty left = transExp(venv, tenv, a->u.op.left);
     struct expty right = transExp(venv, tenv, a->u.op.right);
-    if (oper == A_plusOp) {
+    // Arithmetic operators.
+    switch (oper) {
+    case A_plusOp:
+    case A_minusOp:
+    case A_timesOp:
+    case A_divideOp:
+    case A_eqOp:
+    case A_neqOp:
+    case A_ltOp:
+    case A_leOp:
+    case A_gtOp:
+    case A_geOp:
       if (left.ty->kind != Ty_int)
         EM_error(a->u.op.left->pos, "integer required");
       if (right.ty->kind != Ty_int)
         EM_error(a->u.op.right->pos, "integer required");
       return expTy(NULL, Ty_Int());
-    } else {
+    default:
       EM_error(a->pos, "unknown oper");
       return expTy(NULL, Ty_Int());
     }
@@ -148,19 +160,19 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
   case A_recordExp: {
     Ty_ty recordType = S_look(tenv, a->u.record.typ);
     if (!recordType) {
-      EM_error(a->pos, "unrecognised record type: %s", a->u.record.typ);
+      EM_error(a->pos, "unrecognised record type: %s", S_name(a->u.record.typ));
       return expTy(NULL, Ty_Void());
     }
     return expTy(NULL, recordType);
   }
   case A_seqExp: {
     A_expList currentExp = a->u.seq;
-    struct expty currentExpType;
+    Ty_ty currentExpType = NULL;
     while (currentExp) {
-      currentExpType = transExp(venv, tenv, currentExp->head);
+      currentExpType = transExp(venv, tenv, currentExp->head).ty;
       currentExp = currentExp->tail;
     }
-    return expTy(NULL, currentExpType.ty);
+    return expTy(NULL, currentExpType ? currentExpType : Ty_Void());
   }
   case A_assignExp: {
     // Check that the types match up.
@@ -197,12 +209,12 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     struct expty condType = transExp(venv, tenv, a->u.whilee.test);
     if (condType.ty->kind != Ty_int) {
       EM_error(a->pos, "while condition evaluates to non-integer value");
-      return expTy(NULL, Ty_Void());
+      return expTy(NULL, Ty_Int());
     }
     struct expty bodyType = transExp(venv, tenv, a->u.whilee.body);
     if (bodyType.ty->kind != Ty_void)
       EM_error(a->pos, "while expression contains a non-void body expression");
-    return expTy(NULL, Ty_Void());
+    return expTy(NULL, Ty_Int());
   }
   case A_forExp: {
     S_beginScope(venv);
@@ -224,38 +236,57 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     return expTy(NULL, Ty_Void());
   }
   case A_letExp: {
-    struct expty exp;
     A_decList d;
     S_beginScope(venv);
     S_beginScope(tenv);
     for (d = a->u.let.decs; d; d = d->tail)
       transDec(venv, tenv, d->head);
-    exp = transExp(venv, tenv, a->u.let.body);
+    struct expty exp = transExp(venv, tenv, a->u.let.body);
     S_endScope(tenv);
     S_endScope(venv);
-    break;
+    return expTy(NULL, exp.ty);
   }
   case A_arrayExp: {
     Ty_ty arrayType = S_look(tenv, a->u.array.typ);
     if (!arrayType) {
-      EM_error(a->pos, "undefined array type: %s", a->u.array.typ);
+      EM_error(a->pos, "undefined array type: %s", S_name(a->u.array.typ));
       return expTy(NULL, Ty_Void());
     }
+    arrayType = actual_ty(arrayType);
+    assert(arrayType->kind == Ty_array);
+    Ty_ty elemType = actual_ty(arrayType->u.array);
     // Check that initializer is the right type.
     struct expty initType = transExp(venv, tenv, a->u.array.init);
-    if (initType.ty != arrayType) {
-      EM_error(a->pos, "init type does not match array type");
-      return expTy(NULL, Ty_Array(arrayType));
+    if (initType.ty->kind != elemType->kind) {
+      EM_error(a->pos, "init type does not match array type %s",
+               S_name(a->u.array.typ));
+      return expTy(NULL, Ty_Array(elemType));
     }
     // Check that size evaluates to an integer.
     struct expty sizeType = transExp(venv, tenv, a->u.array.size);
     if (sizeType.ty->kind != Ty_int) {
       EM_error(a->pos, "array size is not an integer");
-      return expTy(NULL, Ty_Array(arrayType));
+      return expTy(NULL, Ty_Array(elemType));
     }
-    return expTy(NULL, Ty_Array(arrayType));
+    return expTy(NULL, Ty_Array(elemType));
   }
   }
+}
+
+Ty_tyList makeFormalTyList(S_table tenv, A_fieldList fieldList) {
+  Ty_tyList head = NULL, current = NULL, prev = NULL;
+  while (fieldList) {
+    A_field currentField = fieldList->head;
+    Ty_ty e = S_look(tenv, currentField->typ);
+    current = Ty_TyList(actual_ty(e), NULL);
+    if (!head)
+      head = current;
+    else
+      prev->tail = current;
+    fieldList = fieldList->tail;
+    prev = current;
+  }
+  return head;
 }
 
 void transDec(S_table venv, S_table tenv, A_dec d) {
@@ -266,24 +297,52 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
     break;
   }
   case A_typeDec: {
-    S_enter(tenv, d->u.type->head->name, transTy(tenv, d->u.type->head->ty));
+    // We do two passes to handle recursive types.
+    // First we register the names of each type.
+    A_nametyList tyDecList = d->u.type;
+    while (tyDecList) {
+      S_enter(tenv, tyDecList->head->name,
+              Ty_Name(tyDecList->head->name, NULL));
+      tyDecList = tyDecList->tail;
+    }
+    // Now fill in the types.
+    tyDecList = d->u.type;
+    while (tyDecList) {
+      Ty_ty currentType = S_look(tenv, tyDecList->head->name);
+      assert(currentType->kind == Ty_name);
+      currentType->u.name.ty = transTy(tenv, tyDecList->head->ty);
+      tyDecList = tyDecList->tail;
+    }
     break;
   }
   case A_functionDec: {
-    // TODO: Iterate through the list.
-    A_fundec f = d->u.function->head;
-    Ty_ty resultTy = S_look(tenv, f->result);
-    Ty_tyList formalTys = NULL; // makeFormalTyList(tenv, f->params)
-    S_enter(venv, f->name, E_FunEntry(formalTys, resultTy));
-    S_beginScope(venv);
-    {
-      A_fieldList l;
-      Ty_tyList t;
-      for (l = f->params, t = formalTys; l; l = l->tail, t = t->tail)
-        S_enter(venv, l->head->name, E_VarEntry(t->head));
+    // We do two passes to handle recursive functions.
+    // First we register the names of each function.
+    A_fundecList funDecList = d->u.function;
+    while (funDecList) {
+      A_fundec f = funDecList->head;
+      Ty_ty resultTy = f->result ? S_look(tenv, f->result) : NULL;
+      Ty_tyList formalTys = makeFormalTyList(tenv, f->params);
+      S_enter(venv, f->name, E_FunEntry(formalTys, resultTy));
+      funDecList = funDecList->tail;
     }
-    transExp(venv, tenv, f->body);
-    S_endScope(venv);
+    // Now walk the bodies.
+    funDecList = d->u.function;
+    while (funDecList) {
+      A_fundec f = funDecList->head;
+      E_enventry e = S_look(venv, f->name);
+      assert(e->kind == E_funEntry);
+      S_beginScope(venv);
+      {
+        A_fieldList l;
+        Ty_tyList t;
+        for (l = f->params, t = e->u.fun.formals; l; l = l->tail, t = t->tail)
+          S_enter(venv, l->head->name, E_VarEntry(t->head));
+      }
+      transExp(venv, tenv, f->body);
+      S_endScope(venv);
+      funDecList = funDecList->tail;
+    }
     break;
   }
   }
