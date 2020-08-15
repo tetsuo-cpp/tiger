@@ -23,9 +23,11 @@ struct expty expTy(Tr_exp exp, Ty_ty ty) {
 
 Ty_ty actual_ty(Ty_ty type) {
   Ty_ty t = type;
-  while (t && t->kind == Ty_name)
+  while (t && t->kind == Ty_name) {
     t = t->u.name.ty;
-  assert(t);
+    if (t == type)
+      return NULL;
+  }
   return t;
 }
 
@@ -129,7 +131,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
                S_name(a->u.call.func));
       return expTy(NULL, Ty_Void());
     }
-    return expTy(NULL, func->u.fun.result);
+    return expTy(NULL, func->u.fun.result ? func->u.fun.result : Ty_Void());
   }
   case A_opExp: {
     A_oper oper = a->u.op.oper;
@@ -247,12 +249,13 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     return expTy(NULL, exp.ty);
   }
   case A_arrayExp: {
-    Ty_ty arrayType = S_look(tenv, a->u.array.typ);
-    if (!arrayType) {
+    Ty_ty nameType = S_look(tenv, a->u.array.typ);
+    if (!nameType) {
       EM_error(a->pos, "undefined array type: %s", S_name(a->u.array.typ));
       return expTy(NULL, Ty_Void());
     }
-    arrayType = actual_ty(arrayType);
+    assert(nameType->kind == Ty_name);
+    Ty_ty arrayType = actual_ty(nameType);
     assert(arrayType->kind == Ty_array);
     Ty_ty elemType = actual_ty(arrayType->u.array);
     // Check that initializer is the right type.
@@ -260,15 +263,15 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     if (initType.ty->kind != elemType->kind) {
       EM_error(a->pos, "init type does not match array type %s",
                S_name(a->u.array.typ));
-      return expTy(NULL, Ty_Array(elemType));
+      return expTy(NULL, nameType);
     }
     // Check that size evaluates to an integer.
     struct expty sizeType = transExp(venv, tenv, a->u.array.size);
     if (sizeType.ty->kind != Ty_int) {
       EM_error(a->pos, "array size is not an integer");
-      return expTy(NULL, Ty_Array(elemType));
+      return expTy(NULL, nameType);
     }
-    return expTy(NULL, Ty_Array(elemType));
+    return expTy(NULL, nameType);
   }
   }
 }
@@ -293,6 +296,11 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
   switch (d->kind) {
   case A_varDec: {
     struct expty e = transExp(venv, tenv, d->u.var.init);
+    if (d->u.var.typ) {
+      Ty_ty specifiedType = S_look(tenv, d->u.var.typ);
+      if (actual_ty(specifiedType) != actual_ty(e.ty))
+        EM_error(d->pos, "type error in variable decl");
+    }
     S_enter(venv, d->u.var.var, E_VarEntry(e.ty));
     break;
   }
@@ -311,6 +319,9 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
       Ty_ty currentType = S_look(tenv, tyDecList->head->name);
       assert(currentType->kind == Ty_name);
       currentType->u.name.ty = transTy(tenv, tyDecList->head->ty);
+      if (!actual_ty(currentType->u.name.ty)) {
+        EM_error(d->pos, "invalid recursive type");
+      }
       tyDecList = tyDecList->tail;
     }
     break;
