@@ -350,7 +350,15 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
         for (l = f->params, t = e->u.fun.formals; l; l = l->tail, t = t->tail)
           S_enter(venv, l->head->name, E_VarEntry(t->head));
       }
-      transExp(venv, tenv, f->body);
+      struct expty actualReturn = transExp(venv, tenv, f->body);
+      Ty_ty expectedReturn = f->result ? S_look(tenv, f->result) : NULL;
+      if (expectedReturn) {
+        if (actualReturn.ty->kind != expectedReturn->kind)
+          EM_error(f->pos, "function %s returns wrong type", S_name(f->name));
+      } else {
+        if (actualReturn.ty->kind != Ty_void)
+          EM_error(f->pos, "procedure %s returns value", S_name(f->name));
+      }
       S_endScope(venv);
       funDecList = funDecList->tail;
     }
