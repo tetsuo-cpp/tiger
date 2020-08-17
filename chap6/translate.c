@@ -52,7 +52,7 @@ static Tr_level outerLevel = NULL;
 
 Tr_level Tr_outermost(void) {
   if (!outerLevel)
-    outerLevel = Tr_newLevel(NULL, Temp_newlabel(), U_BoolList(NULL, NULL));
+    outerLevel = Tr_newLevel(NULL, Temp_newlabel(), NULL);
   return outerLevel;
 }
 
