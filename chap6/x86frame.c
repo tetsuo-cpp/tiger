@@ -14,5 +14,75 @@ struct F_access_ {
   } u;
 };
 
-static F_access InFrame(int offset);
-static F_access InReg(Temp_temp reg);
+static const int F_WORD_SIZE = 4;
+
+static F_access InFrame(int offset) {
+  F_access a = checked_malloc(sizeof(struct F_access_));
+  a->kind = inFrame;
+  a->u.offset = offset;
+  return a;
+}
+
+static F_access InReg(Temp_temp reg) {
+  F_access a = checked_malloc(sizeof(struct F_access_));
+  a->kind = inReg;
+  a->u.reg = reg;
+  return a;
+}
+
+struct F_frame_ {
+  Temp_label name;
+  F_accessList formals;
+  int localCount;
+};
+
+static F_accessList F_AccessList(F_access head, F_accessList tail) {
+  F_accessList list = checked_malloc(sizeof(struct F_accessList_));
+  list->head = head;
+  list->tail = tail;
+  return list;
+}
+
+static F_accessList makeAccessList(U_boolList list) {
+  F_accessList head = NULL, tail = NULL;
+  int formalCount = 0;
+  while (list) {
+    F_access current = NULL;
+    if (list->head)
+      current = InFrame(formalCount * F_WORD_SIZE);
+    else
+      current = InReg(Temp_newtemp());
+    assert(current);
+    F_accessList newTail = F_AccessList(current, NULL);
+    if (!head)
+      head = newTail;
+    else
+      tail->tail = newTail;
+    tail = newTail;
+    list = list->tail;
+    ++formalCount;
+  }
+  return head;
+}
+
+F_frame F_newFrame(Temp_label name, U_boolList formals) {
+  F_frame frame = checked_malloc(sizeof(struct F_frame_));
+  frame->name = name;
+  frame->formals = makeAccessList(formals);
+  frame->localCount = 0;
+  return frame;
+}
+
+Temp_label F_name(F_frame f) { return f->name; }
+
+F_accessList F_formals(F_frame f) { return f->formals; }
+
+F_access F_allocLocal(F_frame f, bool escape) {
+  ++f->localCount;
+  F_access local = NULL;
+  if (escape)
+    local = InFrame(-f->localCount * F_WORD_SIZE);
+  else
+    local = InReg(Temp_newtemp());
+  return local;
+}
