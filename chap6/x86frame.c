@@ -45,11 +45,11 @@ static F_accessList F_AccessList(F_access head, F_accessList tail) {
 
 static F_accessList makeAccessList(U_boolList list) {
   F_accessList head = NULL, tail = NULL;
-  int formalCount = 0;
+  int formalOffset = -1; // Zero address is reserved for return value.
   while (list) {
     F_access current = NULL;
     if (list->head)
-      current = InFrame(formalCount * F_WORD_SIZE);
+      current = InFrame(formalOffset * F_WORD_SIZE);
     else
       current = InReg(Temp_newtemp());
     assert(current);
@@ -60,7 +60,7 @@ static F_accessList makeAccessList(U_boolList list) {
       tail->tail = newTail;
     tail = newTail;
     list = list->tail;
-    ++formalCount;
+    --formalOffset;
   }
   return head;
 }

@@ -1,10 +1,18 @@
 #include <stddef.h>
+#include <stdio.h>
+
 #include "util.h"
 #include "errormsg.h"
 #include "symbol.h"
 #include "absyn.h"
 #include "types.h"
+#include "temp.h"
+#include "translate.h"
 #include "env.h"
+#include "frame.h"
+
+#include <stdbool.h>
+
 #include "semant.h"
 
 typedef void *Tr_exp;
@@ -31,17 +39,18 @@ Ty_ty actual_ty(Ty_ty type) {
   return t;
 }
 
-struct expty transVar(S_table venv, S_table tenv, A_var v);
-struct expty transExp(S_table venv, S_table tenv, A_exp a);
-void transDec(S_table venv, S_table tenv, A_dec dec);
+struct expty transVar(Tr_level level, S_table venv, S_table tenv, A_var v);
+struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a);
+void transDec(Tr_level level, S_table venv, S_table tenv, A_dec dec);
 Ty_ty transTy(S_table tenv, A_ty a);
 
 void SEM_transProg(A_exp exp) {
   S_table venv = E_base_venv(), tenv = E_base_tenv();
-  transExp(venv, tenv, exp);
+  Tr_level outerLevel = Tr_outermost();
+  transExp(outerLevel, venv, tenv, exp);
 }
 
-struct expty transVar(S_table venv, S_table tenv, A_var v) {
+struct expty transVar(Tr_level level, S_table venv, S_table tenv, A_var v) {
   switch (v->kind) {
   case A_simpleVar: {
     E_enventry x = S_look(venv, v->u.simple);
@@ -53,7 +62,7 @@ struct expty transVar(S_table venv, S_table tenv, A_var v) {
     }
   }
   case A_fieldVar: {
-    struct expty recordType = transVar(venv, tenv, v->u.field.var);
+    struct expty recordType = transVar(level, venv, tenv, v->u.field.var);
     if (!recordType.ty || recordType.ty->kind != Ty_record) {
       EM_error(v->pos, "variable is not a record");
       return expTy(NULL, Ty_Int());
@@ -71,12 +80,12 @@ struct expty transVar(S_table venv, S_table tenv, A_var v) {
     return expTy(NULL, Ty_Int());
   }
   case A_subscriptVar: {
-    struct expty arrayType = transVar(venv, tenv, v->u.subscript.var);
+    struct expty arrayType = transVar(level, venv, tenv, v->u.subscript.var);
     if (!arrayType.ty || arrayType.ty->kind != Ty_array) {
       EM_error(v->pos, "subscript operator used on non-array type");
       return expTy(NULL, Ty_Int());
     }
-    struct expty indexType = transExp(venv, tenv, v->u.subscript.exp);
+    struct expty indexType = transExp(level, venv, tenv, v->u.subscript.exp);
     if (!indexType.ty || indexType.ty->kind != Ty_int) {
       EM_error(v->pos, "subscript operator used with non-integer index");
       return expTy(NULL, Ty_Int());
@@ -87,10 +96,10 @@ struct expty transVar(S_table venv, S_table tenv, A_var v) {
   }
 }
 
-struct expty transExp(S_table venv, S_table tenv, A_exp a) {
+struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
   switch (a->kind) {
   case A_varExp: {
-    return transVar(venv, tenv, a->u.var);
+    return transVar(level, venv, tenv, a->u.var);
   }
   case A_nilExp: {
     return expTy(NULL, Ty_Nil());
@@ -116,7 +125,7 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
                  S_name(a->u.call.func));
         return expTy(NULL, Ty_Void());
       }
-      struct expty argType = transExp(venv, tenv, args->head);
+      struct expty argType = transExp(level, venv, tenv, args->head);
       Ty_ty desiredType = actual_ty(desiredTypes->head);
       if (argType.ty != desiredType) {
         EM_error(a->pos, "mismatching type to function call %s",
@@ -135,8 +144,8 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
   }
   case A_opExp: {
     A_oper oper = a->u.op.oper;
-    struct expty left = transExp(venv, tenv, a->u.op.left);
-    struct expty right = transExp(venv, tenv, a->u.op.right);
+    struct expty left = transExp(level, venv, tenv, a->u.op.left);
+    struct expty right = transExp(level, venv, tenv, a->u.op.right);
     // Arithmetic operators.
     switch (oper) {
     case A_plusOp:
@@ -171,34 +180,34 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     A_expList currentExp = a->u.seq;
     Ty_ty currentExpType = NULL;
     while (currentExp) {
-      currentExpType = transExp(venv, tenv, currentExp->head).ty;
+      currentExpType = transExp(level, venv, tenv, currentExp->head).ty;
       currentExp = currentExp->tail;
     }
     return expTy(NULL, currentExpType ? currentExpType : Ty_Void());
   }
   case A_assignExp: {
     // Check that the types match up.
-    struct expty lhs = transVar(venv, tenv, a->u.assign.var);
-    struct expty rhs = transExp(venv, tenv, a->u.assign.exp);
+    struct expty lhs = transVar(level, venv, tenv, a->u.assign.var);
+    struct expty rhs = transExp(level, venv, tenv, a->u.assign.exp);
     if (lhs.ty != rhs.ty)
       EM_error(a->pos, "type error in assignment");
     // Assignments don't evaluate to anything.
     return expTy(NULL, Ty_Void());
   }
   case A_ifExp: {
-    struct expty condType = transExp(venv, tenv, a->u.iff.test);
+    struct expty condType = transExp(level, venv, tenv, a->u.iff.test);
     if (condType.ty->kind != Ty_int) {
       EM_error(a->pos, "if condition evaluates to non-integer value");
       return expTy(NULL, Ty_Void());
     }
-    struct expty thenType = transExp(venv, tenv, a->u.iff.then);
+    struct expty thenType = transExp(level, venv, tenv, a->u.iff.then);
     // If there is no else clause, then clause can't evaluate to a type.
     if (!a->u.iff.elsee) {
       if (thenType.ty->kind != Ty_void)
         EM_error(a->pos, "if expression with else block has a then block "
                          "returning non-void");
     } else {
-      struct expty elseType = transExp(venv, tenv, a->u.iff.elsee);
+      struct expty elseType = transExp(level, venv, tenv, a->u.iff.elsee);
       if (thenType.ty != elseType.ty)
         EM_error(a->pos, "if expression has then and else blocks that evaluate "
                          "to different types");
@@ -208,26 +217,27 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     return expTy(NULL, Ty_Void());
   }
   case A_whileExp: {
-    struct expty condType = transExp(venv, tenv, a->u.whilee.test);
+    struct expty condType = transExp(level, venv, tenv, a->u.whilee.test);
     if (condType.ty->kind != Ty_int) {
       EM_error(a->pos, "while condition evaluates to non-integer value");
       return expTy(NULL, Ty_Int());
     }
-    struct expty bodyType = transExp(venv, tenv, a->u.whilee.body);
+    struct expty bodyType = transExp(level, venv, tenv, a->u.whilee.body);
     if (bodyType.ty->kind != Ty_void)
       EM_error(a->pos, "while expression contains a non-void body expression");
     return expTy(NULL, Ty_Int());
   }
   case A_forExp: {
+    Tr_access local = Tr_allocLocal(level, true);
     S_beginScope(venv);
-    S_enter(venv, a->u.forr.var, E_VarEntry(Ty_Int()));
-    struct expty lowType = transExp(venv, tenv, a->u.forr.lo);
+    S_enter(venv, a->u.forr.var, E_VarEntry(local, Ty_Int()));
+    struct expty lowType = transExp(level, venv, tenv, a->u.forr.lo);
     if (lowType.ty->kind != Ty_int)
       EM_error(a->pos, "lower bound of for expression has non-integer type");
-    struct expty highType = transExp(venv, tenv, a->u.forr.hi);
+    struct expty highType = transExp(level, venv, tenv, a->u.forr.hi);
     if (highType.ty->kind != Ty_int)
       EM_error(a->pos, "upper bound of for expression has non-integer type");
-    struct expty bodyType = transExp(venv, tenv, a->u.forr.body);
+    struct expty bodyType = transExp(level, venv, tenv, a->u.forr.body);
     if (bodyType.ty->kind != Ty_void)
       EM_error(a->pos, "body of for expression has non-void type");
     S_endScope(venv);
@@ -242,8 +252,8 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     S_beginScope(venv);
     S_beginScope(tenv);
     for (d = a->u.let.decs; d; d = d->tail)
-      transDec(venv, tenv, d->head);
-    struct expty exp = transExp(venv, tenv, a->u.let.body);
+      transDec(level, venv, tenv, d->head);
+    struct expty exp = transExp(level, venv, tenv, a->u.let.body);
     S_endScope(tenv);
     S_endScope(venv);
     return expTy(NULL, exp.ty);
@@ -259,14 +269,14 @@ struct expty transExp(S_table venv, S_table tenv, A_exp a) {
     assert(arrayType->kind == Ty_array);
     Ty_ty elemType = actual_ty(arrayType->u.array);
     // Check that initializer is the right type.
-    struct expty initType = transExp(venv, tenv, a->u.array.init);
+    struct expty initType = transExp(level, venv, tenv, a->u.array.init);
     if (initType.ty->kind != elemType->kind) {
       EM_error(a->pos, "init type does not match array type %s",
                S_name(a->u.array.typ));
       return expTy(NULL, nameType);
     }
     // Check that size evaluates to an integer.
-    struct expty sizeType = transExp(venv, tenv, a->u.array.size);
+    struct expty sizeType = transExp(level, venv, tenv, a->u.array.size);
     if (sizeType.ty->kind != Ty_int) {
       EM_error(a->pos, "array size is not an integer");
       return expTy(NULL, nameType);
@@ -292,16 +302,32 @@ Ty_tyList makeFormalTyList(S_table tenv, A_fieldList fieldList) {
   return head;
 }
 
-void transDec(S_table venv, S_table tenv, A_dec d) {
+U_boolList makeFormalBoolList(A_fieldList fieldList) {
+  U_boolList head = NULL, current = NULL, prev = NULL;
+  while (fieldList) {
+    A_field currentField = fieldList->head;
+    current = U_BoolList(true, NULL);
+    if (!head)
+      head = current;
+    else
+      prev->tail = current;
+    fieldList = fieldList->tail;
+    prev = current;
+  }
+  return head;
+}
+
+void transDec(Tr_level level, S_table venv, S_table tenv, A_dec d) {
   switch (d->kind) {
   case A_varDec: {
-    struct expty e = transExp(venv, tenv, d->u.var.init);
+    struct expty e = transExp(level, venv, tenv, d->u.var.init);
     if (d->u.var.typ) {
       Ty_ty specifiedType = S_look(tenv, d->u.var.typ);
       if (actual_ty(specifiedType) != actual_ty(e.ty))
         EM_error(d->pos, "type error in variable decl");
     }
-    S_enter(venv, d->u.var.var, E_VarEntry(e.ty));
+    Tr_access local = Tr_allocLocal(level, true);
+    S_enter(venv, d->u.var.var, E_VarEntry(local, e.ty));
     break;
   }
   case A_typeDec: {
@@ -334,7 +360,11 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
       A_fundec f = funDecList->head;
       Ty_ty resultTy = f->result ? S_look(tenv, f->result) : NULL;
       Ty_tyList formalTys = makeFormalTyList(tenv, f->params);
-      S_enter(venv, f->name, E_FunEntry(formalTys, resultTy));
+      U_boolList formalBools = makeFormalBoolList(f->params);
+      Temp_label newLabel = Temp_newlabel();
+      Tr_level newLevel = Tr_newLevel(level, newLabel, formalBools);
+      S_enter(venv, f->name,
+              E_FunEntry(newLevel, newLabel, formalTys, resultTy));
       funDecList = funDecList->tail;
     }
     // Now walk the bodies.
@@ -348,9 +378,9 @@ void transDec(S_table venv, S_table tenv, A_dec d) {
         A_fieldList l;
         Ty_tyList t;
         for (l = f->params, t = e->u.fun.formals; l; l = l->tail, t = t->tail)
-          S_enter(venv, l->head->name, E_VarEntry(t->head));
+          S_enter(venv, l->head->name, E_VarEntry(e->u.fun.level, t->head));
       }
-      struct expty actualReturn = transExp(venv, tenv, f->body);
+      struct expty actualReturn = transExp(level, venv, tenv, f->body);
       Ty_ty expectedReturn = f->result ? S_look(tenv, f->result) : NULL;
       if (expectedReturn) {
         if (actualReturn.ty->kind != expectedReturn->kind)
