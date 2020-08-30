@@ -9,7 +9,6 @@
 #include "temp.h"
 #include "translate.h"
 #include "env.h"
-#include "frame.h"
 
 #include <stdbool.h>
 
@@ -305,7 +304,6 @@ Ty_tyList makeFormalTyList(S_table tenv, A_fieldList fieldList) {
 U_boolList makeFormalBoolList(A_fieldList fieldList) {
   U_boolList head = NULL, current = NULL, prev = NULL;
   while (fieldList) {
-    A_field currentField = fieldList->head;
     current = U_BoolList(true, NULL);
     if (!head)
       head = current;
@@ -377,8 +375,11 @@ void transDec(Tr_level level, S_table venv, S_table tenv, A_dec d) {
       {
         A_fieldList l;
         Ty_tyList t;
-        for (l = f->params, t = e->u.fun.formals; l; l = l->tail, t = t->tail)
-          S_enter(venv, l->head->name, E_VarEntry(e->u.fun.level, t->head));
+        Tr_accessList a;
+        for (l = f->params, t = e->u.fun.formals,
+            a = Tr_formals(e->u.fun.level);
+             l; l = l->tail, t = t->tail, a = a->tail)
+          S_enter(venv, l->head->name, E_VarEntry(a->head, t->head));
       }
       struct expty actualReturn = transExp(level, venv, tenv, f->body);
       Ty_ty expectedReturn = f->result ? S_look(tenv, f->result) : NULL;

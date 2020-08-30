@@ -12,11 +12,6 @@ struct Tr_access_ {
   F_access access;
 };
 
-struct Tr_accessList_ {
-  Tr_access head;
-  Tr_accessList tail;
-};
-
 struct Tr_level_ {
   Tr_level parent;
   Temp_label name;
