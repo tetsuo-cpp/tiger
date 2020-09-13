@@ -381,7 +381,7 @@ void transDec(Tr_level level, S_table venv, S_table tenv, A_dec d) {
              l; l = l->tail, t = t->tail, a = a->tail)
           S_enter(venv, l->head->name, E_VarEntry(a->head, t->head));
       }
-      struct expty actualReturn = transExp(level, venv, tenv, f->body);
+      struct expty actualReturn = transExp(e->u.fun.level, venv, tenv, f->body);
       Ty_ty expectedReturn = f->result ? S_look(tenv, f->result) : NULL;
       if (expectedReturn) {
         if (actualReturn.ty->kind != expectedReturn->kind)
