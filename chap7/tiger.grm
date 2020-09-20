@@ -1,0 +1,248 @@
+%{
+#include <stdio.h>
+#include "util.h"
+#include "symbol.h"
+#include "errormsg.h"
+#include "absyn.h"
+
+int yylex(void); /* function prototype */
+
+A_exp absyn_root;
+
+void yyerror(char *s)
+{
+ EM_error(EM_tokPos, "%s", s);
+}
+%}
+
+
+%union {
+	int pos;
+	int ival;
+	string sval;
+	A_var var;
+	A_exp exp;
+        A_dec dec;
+        A_ty ty;
+        A_fundec fundec;
+        A_namety nameTy;
+        A_decList declList;
+        A_expList expList;
+        A_efieldList efieldList;
+        A_fundecList fundecList;
+        A_fieldList fieldList;
+        A_nametyList nameTyList;
+	/* et cetera */
+	}
+
+%token <sval> ID STRING
+%token <ival> INT
+
+%token
+  COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK
+  LBRACE RBRACE DOT
+  PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE
+  AND OR ASSIGN
+  ARRAY IF THEN ELSE WHILE FOR TO DO LET IN END OF
+  BREAK NIL
+  FUNCTION VAR TYPE
+
+%right ASSIGN
+%left AND OR
+%nonassoc EQ NEQ LT LE GT GE
+%left PLUS MINUS
+%left TIMES DIVIDE
+%right UMINUS
+%right THEN ELSE DO OF
+
+%type   <exp>           exp program bin_op let if_exp record array while_loop for_loop function_call
+%type   <dec>           decl var_decl
+%type   <ty>            type_id
+%type   <fundec>        function_decl
+%type   <nameTy>        type_decl
+%type   <declList>      decl_list
+%type   <expList>       exp_list exp_list_empty function_call_args
+%type   <efieldList>    record_args
+%type   <fundecList>    function_decl_list
+%type   <nameTyList>    type_decl_list
+%type   <fieldList>     function_args function_args_list fields
+%type   <var>           lvalue lvalue_not_id
+/* et cetera */
+
+%debug
+
+%start program
+
+%%
+
+program:	exp {absyn_root=$1;}
+        ;
+
+/* Everything in Tiger is an expression. */
+exp:            let
+        |       lvalue {$$=A_VarExp(EM_tokPos,$1);}
+        |       lvalue ASSIGN exp {$$=A_AssignExp(EM_tokPos,$1,$3);}
+        |       LPAREN exp_list_empty RPAREN {$$=A_SeqExp(EM_tokPos,$2);}
+        |       NIL {$$=A_NilExp(EM_tokPos);}
+        |       INT {$$=A_IntExp(EM_tokPos,$1);}
+        |       STRING {$$=A_StringExp(EM_tokPos,$1);}
+        |       MINUS exp %prec UMINUS {$$=A_OpExp(EM_tokPos,A_minusOp,A_IntExp(EM_tokPos,0),$2);}
+        |       bin_op
+        |       record
+        |       array
+        |       if_exp
+        |       while_loop
+        |       for_loop
+        |       BREAK {$$=A_BreakExp(EM_tokPos);}
+        |       function_call
+        ;
+
+/* Let expression. */
+let:            LET decl_list IN exp_list END {$$=A_LetExp(EM_tokPos,$2,A_SeqExp(EM_tokPos,$4));}
+        ;
+
+/* List of declarations. */
+decl_list:      decl decl_list {$$=A_DecList($1,$2);}
+        |       error decl_list /* If we see a bad decl, keep parsing. */ {$$=$2;}
+        | {$$=NULL;}
+        ;
+
+exp_list_empty: exp_list
+        | {$$=NULL;}
+        ;
+
+/* List of expressions to execute. */
+exp_list:       exp SEMICOLON exp_list {$$=A_ExpList($1,$3);}
+        |       error SEMICOLON exp_list /* If we see a bad expr, keep parsing. */ {$$=$3;}
+        |       exp /* Terminating. */ {$$=A_ExpList($1,NULL);}
+        ;
+
+/* Declaration types. */
+decl:           type_decl_list /* Type declaration. */ {$$=A_TypeDec(EM_tokPos,$1);}
+        |       var_decl /* Variable declaration. */
+        |       function_decl_list /* Function declaration. */ {$$=A_FunctionDec(EM_tokPos,$1);}
+        ;
+
+type_decl_list:
+                type_decl type_decl_list {$$=A_NametyList($1,$2);}
+        |       type_decl {$$=A_NametyList($1,NULL);}
+
+/* Type declaration. */
+type_decl:      TYPE ID EQ type_id {$$=A_Namety(S_Symbol($2),$4);}
+
+/* The rhs of a type decl. */
+type_id:        ID {$$=A_NameTy(EM_tokPos,S_Symbol($1));}
+        |       LBRACE fields RBRACE {$$=A_RecordTy(EM_tokPos,$2);}
+        |       ARRAY OF ID {$$=A_ArrayTy(EM_tokPos,S_Symbol($3));}
+        ;
+
+/* A series of type fields for when we declare a record. */
+fields:         ID COLON ID COMMA fields {$$=A_FieldList(A_Field(EM_tokPos,S_Symbol($1),S_Symbol($3)),$5);}
+        |       ID COLON ID {$$=A_FieldList(A_Field(EM_tokPos,S_Symbol($1),S_Symbol($3)),NULL);}
+        ;
+
+/* Variable declaration. */
+var_decl:       VAR ID ASSIGN exp {$$=A_VarDec(EM_tokPos,S_Symbol($2),NULL,$4);}
+        |       VAR ID COLON ID ASSIGN exp {$$=A_VarDec(EM_tokPos,S_Symbol($2),S_Symbol($4),$6);}
+        ;
+
+function_decl_list:
+                function_decl function_decl_list {$$=A_FundecList($1,$2);}
+        |       function_decl {$$=A_FundecList($1,NULL);}
+        ;
+
+/* Function declaration. */
+function_decl:  FUNCTION ID LPAREN function_args RPAREN COLON ID EQ exp {$$=A_Fundec(EM_tokPos,S_Symbol($2),$4,S_Symbol($7),$9);}
+        |       FUNCTION ID LPAREN function_args RPAREN EQ exp /* No return type. */ {
+            $$ = A_Fundec(EM_tokPos, S_Symbol($2), $4, NULL, $7);
+                }
+        ;
+
+/* Function arguments within a declaration. Can either be a list or empty. */
+function_args:  function_args_list
+        | {$$=NULL;}
+        ;
+
+/* List of function arguments. */
+function_args_list:
+                ID COLON ID COMMA function_args_list {$$=A_FieldList(A_Field(EM_tokPos,S_Symbol($1),S_Symbol($3)),$5);}
+        |       ID COLON ID {$$=A_FieldList(A_Field(EM_tokPos,S_Symbol($1),S_Symbol($3)), NULL);}
+        ;
+
+/* LValue. */
+lvalue:         ID {$$=A_SimpleVar(EM_tokPos,S_Symbol($1));}
+        |       ID LBRACK exp RBRACK {$$=A_SubscriptVar(EM_tokPos,A_SimpleVar(EM_tokPos,S_Symbol($1)),$3);}
+        |       lvalue_not_id
+        ;
+
+/* Some hackiness to remove shift/reduce conflicts. */
+lvalue_not_id:  lvalue DOT ID /* Record member access. */ {$$=A_FieldVar(EM_tokPos,$1,S_Symbol($3));}
+        |       lvalue_not_id LBRACK exp RBRACK {$$=A_SubscriptVar(EM_tokPos,$1,$3);}
+        ;
+
+/* Binary operators. */
+bin_op:         exp PLUS exp {$$=A_OpExp(EM_tokPos,A_plusOp,$1,$3);}
+        |       exp MINUS exp {$$=A_OpExp(EM_tokPos,A_minusOp,$1,$3);}
+        |       exp TIMES exp {$$=A_OpExp(EM_tokPos,A_timesOp,$1,$3);}
+        |       exp DIVIDE exp {$$=A_OpExp(EM_tokPos,A_divideOp,$1,$3);}
+        |       exp EQ exp {$$=A_OpExp(EM_tokPos,A_eqOp,$1,$3);}
+        |       exp NEQ exp {$$=A_OpExp(EM_tokPos,A_neqOp,$1,$3);}
+        |       exp LT exp {$$=A_OpExp(EM_tokPos,A_ltOp,$1,$3);}
+        |       exp GT exp {$$=A_OpExp(EM_tokPos,A_gtOp,$1,$3);}
+        |       exp LE exp {$$=A_OpExp(EM_tokPos,A_leOp,$1,$3);}
+        |       exp GE exp {$$=A_OpExp(EM_tokPos,A_geOp,$1,$3);}
+        |       exp AND exp {
+            /*
+             * If the first condition is true, we evaluate the truthiness of the second condition.
+             * Otherwise, return false.
+             */
+            $$ = A_IfExp(EM_tokPos, $1, $3, A_IntExp(EM_tokPos, 0));
+                }
+        |       exp OR exp {
+            /*
+             * Similarly, if the first condition is true, we return true. Otherwise, evaluate and
+             * return the truthiness of the second condition.
+             */
+            $$ = A_IfExp(EM_tokPos, $1, A_IntExp(EM_tokPos, 1), $3);
+                }
+        ;
+
+/* Record creation. */
+record:         ID LBRACE record_args RBRACE {$$=A_RecordExp(EM_tokPos,S_Symbol($1),$3);}
+        ;
+
+/* Arguments for record creation. */
+record_args:    ID EQ exp COMMA record_args {$$=A_EfieldList(A_Efield(S_Symbol($1),$3),$5);}
+        |       ID EQ exp {$$=A_EfieldList(A_Efield(S_Symbol($1),$3),NULL);}
+        ;
+
+/* Array creation. */
+array:          ID LBRACK exp RBRACK OF exp {$$=A_ArrayExp(EM_tokPos,S_Symbol($1),$3,$6);}
+
+/* If-Then-Else expression . */
+if_exp:         IF exp THEN exp {$$=A_IfExp(EM_tokPos,$2,$4,NULL);}
+        |       IF exp THEN exp ELSE exp {$$=A_IfExp(EM_tokPos,$2,$4,$6);}
+        ;
+
+/* While-Do loop. */
+while_loop:     WHILE exp DO exp {$$=A_WhileExp(EM_tokPos,$2,$4);}
+        ;
+
+/* For-To loop. */
+for_loop:       FOR ID ASSIGN exp TO exp DO exp {$$=A_ForExp(EM_tokPos,S_Symbol($2),$4,$6,$8);}
+        ;
+
+/* Function call. */
+function_call:  ID LPAREN function_call_args RPAREN /* With arguments. */ {
+            $$ = A_CallExp(EM_tokPos, S_Symbol($1), $3);
+                }
+        |       ID LPAREN RPAREN /* Without arguments. */ {
+            $$ = A_CallExp(EM_tokPos, S_Symbol($1), NULL);
+                }
+        ;
+
+/* List of function call arguments. */
+function_call_args:
+                exp COMMA function_call_args {$$=A_ExpList($1,$3);}
+        |       exp {$$=A_ExpList($1,NULL);}
+        ;
