@@ -26,7 +26,7 @@ struct F_frag_ {
     struct {
       Temp_label label;
       string str;
-    } stringg;
+    } string;
     struct {
       T_stm body;
       F_frame frame;

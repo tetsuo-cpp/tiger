@@ -7,6 +7,8 @@
 #include "absyn.h"
 #include "types.h"
 #include "temp.h"
+#include "tree.h"
+#include "frame.h"
 #include "translate.h"
 #include "env.h"
 
@@ -41,19 +43,22 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a);
 void transDec(Tr_level level, S_table venv, S_table tenv, A_dec dec);
 Ty_ty transTy(S_table tenv, A_ty a);
 
-void SEM_transProg(A_exp exp) {
+F_fragList SEM_transProg(A_exp exp) {
   S_table venv = E_base_venv(), tenv = E_base_tenv();
   Tr_level outerLevel = Tr_outermost();
   transExp(outerLevel, venv, tenv, exp);
+  return Tr_getResult();
 }
 
 struct expty transVar(Tr_level level, S_table venv, S_table tenv, A_var v) {
   switch (v->kind) {
   case A_simpleVar: {
     E_enventry x = S_look(venv, v->u.simple);
-    if (x && x->kind == E_varEntry)
-      return expTy(NULL, actual_ty(x->u.var.ty));
-    else {
+    if (x && x->kind == E_varEntry) {
+      Tr_access local = Tr_allocLocal(level, true);
+      Tr_exp simpleVar = Tr_simpleVar(local, level);
+      return expTy(simpleVar, actual_ty(x->u.var.ty));
+    } else {
       EM_error(v->pos, "undefined variable %s", S_name(v->u.simple));
       return expTy(NULL, Ty_Int());
     }
@@ -67,10 +72,14 @@ struct expty transVar(Tr_level level, S_table venv, S_table tenv, A_var v) {
     // Now let's try to find a field with the right name.
     Ty_fieldList fields = recordType.ty->u.record;
     S_symbol desiredField = v->u.field.sym;
+    size_t fieldNum = 0;
     while (fields) {
-      if (desiredField == fields->head->name)
-        return expTy(NULL, fields->head->ty);
+      if (desiredField == fields->head->name) {
+        Tr_exp fieldVar = Tr_fieldVar(recordType.exp, fieldNum);
+        return expTy(fieldVar, fields->head->ty);
+      }
       fields = fields->tail;
+      ++fieldNum;
     }
     EM_error(v->pos, "could not find a field with name %s",
              S_name(desiredField));
@@ -388,6 +397,9 @@ void transDec(Tr_level level, S_table venv, S_table tenv, A_dec d) {
         if (actualReturn.ty->kind != Ty_void)
           EM_error(f->pos, "procedure %s returns value", S_name(f->name));
       }
+      // Construct and keep track of this proc frag.
+      Tr_procEntryExit(e->u.fun.level, actualReturn.exp,
+                       Tr_formals(e->u.fun.level));
       S_endScope(venv);
       funDecList = funDecList->tail;
     }

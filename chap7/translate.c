@@ -213,4 +213,37 @@ static struct Cx unCx(Tr_exp e) {
   assert(0);
 }
 
-Tr_exp Tr_simpleVar(Tr_access access, Tr_level level) { return NULL; }
+Tr_exp Tr_simpleVar(Tr_access access, Tr_level level) {
+  // Travel up each level and find the one that this access belongs to.
+  T_exp addr = T_Temp(F_FP());
+  while (level != access->level) {
+    F_access staticLink = F_formals(level->frame)->head;
+    addr = F_Exp(staticLink, addr);
+    level = level->parent;
+  }
+  return Tr_Ex(F_Exp(access->access, addr));
+}
+
+Tr_exp Tr_fieldVar(Tr_exp record, size_t fieldNum) {
+  T_exp recordMem = unEx(record);
+  T_exp memoryAddress =
+      T_Binop(T_plus, recordMem, T_Const(fieldNum * F_wordSize));
+  return Tr_Ex(T_Mem(memoryAddress));
+}
+
+// Global fragments list.
+static F_fragList frags = NULL;
+
+static void Tr_pushFrag(F_frag frag) {
+  // Put at the head of the list.
+  F_fragList newEntry = F_FragList(frag, frags);
+  frags = newEntry;
+}
+
+void Tr_procEntryExit(Tr_level level, Tr_exp body, Tr_accessList formals) {
+  T_stm stm = unNx(body);
+  F_frame f = level->frame;
+  Tr_pushFrag(F_ProcFrag(stm, f));
+}
+
+F_fragList Tr_getResult(void) { return frags; }

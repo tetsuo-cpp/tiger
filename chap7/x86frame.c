@@ -15,7 +15,7 @@ struct F_access_ {
   } u;
 };
 
-const int fWordSize = 4;
+const int F_wordSize = 4;
 
 static F_access InFrame(int offset) {
   F_access a = checked_malloc(sizeof(struct F_access_));
@@ -50,7 +50,7 @@ static F_accessList makeAccessList(U_boolList list) {
   while (list) {
     F_access current = NULL;
     if (list->head)
-      current = InFrame(formalOffset * fWordSize);
+      current = InFrame(formalOffset * F_wordSize);
     else
       current = InReg(Temp_newtemp());
     assert(current);
@@ -82,10 +82,23 @@ F_access F_allocLocal(F_frame f, bool escape) {
   ++f->localCount;
   F_access local = NULL;
   if (escape)
-    local = InFrame(-f->localCount * fWordSize);
+    local = InFrame(-f->localCount * F_wordSize);
   else
     local = InReg(Temp_newtemp());
   return local;
+}
+
+static Temp_temp fp = NULL;
+Temp_temp F_FP(void) {
+  if (!fp)
+    fp = Temp_newtemp();
+  return fp;
+}
+
+T_exp F_Exp(F_access acc, T_exp framePtr) {
+  assert(acc->kind == inFrame);
+  T_exp memoryAddress = T_Binop(T_plus, framePtr, T_Const(acc->u.offset));
+  return T_Mem(memoryAddress);
 }
 
 T_exp F_externalCall(string s, T_expList args) {
@@ -93,4 +106,30 @@ T_exp F_externalCall(string s, T_expList args) {
   return T_Call(T_Name(Temp_namedlabel(s)), args);
 }
 
-T_stm F_procEntryExit1(F_frame f, T_stm stm) { return stm; }
+T_stm F_procEntryExit1(F_frame f, T_stm stm) {
+  (void)f;
+  return stm;
+}
+
+F_frag F_StringFrag(Temp_label label, string str) {
+  F_frag frag = checked_malloc(sizeof(*frag));
+  frag->kind = F_stringFrag;
+  frag->u.string.label = label;
+  frag->u.string.str = str;
+  return frag;
+}
+
+F_frag F_ProcFrag(T_stm body, F_frame frame) {
+  F_frag frag = checked_malloc(sizeof(*frag));
+  frag->kind = F_procFrag;
+  frag->u.proc.body = body;
+  frag->u.proc.frame = frame;
+  return frag;
+}
+
+F_fragList F_FragList(F_frag head, F_fragList tail) {
+  F_fragList fragList = checked_malloc(sizeof(*fragList));
+  fragList->head = head;
+  fragList->tail = tail;
+  return fragList;
+}

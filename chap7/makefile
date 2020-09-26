@@ -40,16 +40,16 @@ table.o: table.c table.h util.h
 types.o: types.c types.h util.h symbol.h
 	cc -g -c types.c
 
-env.o: env.c env.h
+env.o: env.c env.h util.h symbol.h types.h temp.h tree.h frame.h translate.h
 	cc -g -c env.c
 
-semant.o: semant.c semant.h util.h symbol.h absyn.h types.h env.h
+semant.o: semant.c semant.h util.h symbol.h absyn.h types.h temp.h tree.h frame.h translate.h env.h
 	cc -g -c semant.c
 
 temp.o: temp.c temp.h util.h symbol.h table.h
 	cc -g -c temp.c
 
-translate.o: translate.c translate.h frame.h util.h symbol.h temp.h
+translate.o: translate.c translate.h frame.h util.h symbol.h temp.h tree.h frame.h
 	cc -g -c translate.c
 
 x86frame.o: x86frame.c frame.h util.h symbol.h temp.h

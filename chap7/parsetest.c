@@ -1,9 +1,13 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "util.h"
 #include "errormsg.h"
 #include "symbol.h"
 #include "absyn.h"
 #include "prabsyn.h"
+#include "temp.h"
+#include "tree.h"
+#include "frame.h"
 #include "semant.h"
 
 extern int yyparse(void);
