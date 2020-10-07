@@ -243,6 +243,11 @@ Tr_exp Tr_arrayVar(Tr_exp sizeExp, Tr_exp initExp) {
   return Tr_Ex(F_externalCall("initArray", args));
 }
 
+Tr_exp Tr_recordVar(size_t numFields) {
+  T_expList args = T_ExpList(T_Const(numFields * F_wordSize), NULL);
+  return Tr_Ex(F_externalCall("initRecord", args));
+}
+
 // Global fragments list.
 static F_fragList frags = NULL;
 

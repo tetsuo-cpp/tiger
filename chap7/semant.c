@@ -181,7 +181,14 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
       EM_error(a->pos, "unrecognised record type: %s", S_name(a->u.record.typ));
       return expTy(NULL, Ty_Void());
     }
-    return expTy(NULL, recordType);
+    size_t numFields = 0;
+    A_efieldList fields = a->u.record.fields;
+    while (fields) {
+      fields = fields->tail;
+      ++numFields;
+    }
+    Tr_exp recordExp = Tr_recordVar(numFields);
+    return expTy(recordExp, recordType);
   }
   case A_seqExp: {
     A_expList currentExp = a->u.seq;
