@@ -97,7 +97,8 @@ struct expty transVar(Tr_level level, S_table venv, S_table tenv, A_var v) {
       return expTy(NULL, Ty_Int());
     }
     // Now evaluate to the array type.
-    return expTy(NULL, arrayType.ty->u.array);
+    Tr_exp subscriptExp = Tr_subscriptVar(arrayType.exp, indexType.exp);
+    return expTy(subscriptExp, arrayType.ty->u.array);
   }
   }
 }
@@ -287,7 +288,8 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
       EM_error(a->pos, "array size is not an integer");
       return expTy(NULL, nameType);
     }
-    return expTy(NULL, nameType);
+    Tr_exp arrayExp = Tr_arrayVar(sizeType.exp, initType.exp);
+    return expTy(arrayExp, nameType);
   }
   }
 }

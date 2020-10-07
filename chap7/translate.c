@@ -231,6 +231,18 @@ Tr_exp Tr_fieldVar(Tr_exp record, size_t fieldNum) {
   return Tr_Ex(T_Mem(memoryAddress));
 }
 
+Tr_exp Tr_subscriptVar(Tr_exp array, Tr_exp index) {
+  T_exp arrayMem = unEx(array);
+  T_exp offset = T_Binop(T_mul, unEx(index), T_Const(F_wordSize));
+  T_exp memoryAddress = T_Binop(T_plus, arrayMem, offset);
+  return Tr_Ex(T_Mem(memoryAddress));
+}
+
+Tr_exp Tr_arrayVar(Tr_exp sizeExp, Tr_exp initExp) {
+  T_expList args = T_ExpList(unEx(sizeExp), T_ExpList(unEx(initExp), NULL));
+  return Tr_Ex(F_externalCall("initArray", args));
+}
+
 // Global fragments list.
 static F_fragList frags = NULL;
 
