@@ -112,10 +112,10 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
     return expTy(NULL, Ty_Nil());
   }
   case A_intExp: {
-    return expTy(NULL, Ty_Int());
+    return expTy(Tr_intExp(a->u.intt), Ty_Int());
   }
   case A_stringExp: {
-    return expTy(NULL, Ty_String());
+    return expTy(Tr_stringExp(a->u.stringg), Ty_String());
   }
   case A_callExp: {
     E_enventry func = S_look(venv, a->u.call.func);
@@ -126,6 +126,7 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
     // Check arguments here.
     A_expList args = a->u.call.args;
     Ty_tyList desiredTypes = func->u.fun.formals;
+    Tr_expList headIR = NULL, tailIR = NULL;
     while (args) {
       if (!desiredTypes) {
         EM_error(a->pos, "function %s called with too many arguments",
@@ -141,34 +142,44 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
       }
       args = args->tail;
       desiredTypes = desiredTypes->tail;
+
+      // Add to the IR expression list.
+      Tr_expList newIR = Tr_ExpList(argType.exp, NULL);
+      if (headIR)
+        tailIR->tail = newIR;
+      else
+        headIR = newIR;
+      tailIR = newIR;
     }
     if (desiredTypes) {
       EM_error(a->pos, "function %s called with not enough arguments",
                S_name(a->u.call.func));
       return expTy(NULL, Ty_Void());
     }
-    return expTy(NULL, func->u.fun.result ? func->u.fun.result : Ty_Void());
+    Tr_exp callExp = Tr_callExp(func->u.fun.label, headIR);
+    return expTy(callExp, func->u.fun.result ? func->u.fun.result : Ty_Void());
   }
   case A_opExp: {
     A_oper oper = a->u.op.oper;
     struct expty left = transExp(level, venv, tenv, a->u.op.left);
     struct expty right = transExp(level, venv, tenv, a->u.op.right);
+    if (left.ty->kind != Ty_int)
+      EM_error(a->u.op.left->pos, "integer required");
+    if (right.ty->kind != Ty_int)
+      EM_error(a->u.op.right->pos, "integer required");
     // Arithmetic operators.
     switch (oper) {
     case A_plusOp:
     case A_minusOp:
     case A_timesOp:
     case A_divideOp:
+      return expTy(Tr_binOpExp(oper, left.exp, right.exp), Ty_Int());
     case A_eqOp:
     case A_neqOp:
     case A_ltOp:
     case A_leOp:
     case A_gtOp:
     case A_geOp:
-      if (left.ty->kind != Ty_int)
-        EM_error(a->u.op.left->pos, "integer required");
-      if (right.ty->kind != Ty_int)
-        EM_error(a->u.op.right->pos, "integer required");
       return expTy(NULL, Ty_Int());
     default:
       EM_error(a->pos, "unknown oper");

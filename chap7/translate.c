@@ -2,6 +2,7 @@
 
 #include "util.h"
 #include "symbol.h"
+#include "absyn.h"
 #include "temp.h"
 #include "tree.h"
 #include "frame.h"
@@ -29,6 +30,13 @@ Tr_access Tr_Access(Tr_level level, F_access fAccess) {
 
 Tr_accessList Tr_AccessList(Tr_access head, Tr_accessList tail) {
   Tr_accessList list = checked_malloc(sizeof(struct Tr_accessList_));
+  list->head = head;
+  list->tail = tail;
+  return list;
+}
+
+Tr_expList Tr_ExpList(Tr_exp head, Tr_expList tail) {
+  Tr_expList list = checked_malloc(sizeof(*list));
   list->head = head;
   list->tail = tail;
   return list;
@@ -248,6 +256,8 @@ Tr_exp Tr_recordVar(size_t numFields) {
   return Tr_Ex(F_externalCall("initRecord", args));
 }
 
+Tr_exp Tr_intExp(int val) { return Tr_Ex(T_Const(val)); }
+
 // Global fragments list.
 static F_fragList frags = NULL;
 
@@ -255,6 +265,49 @@ static void Tr_pushFrag(F_frag frag) {
   // Put at the head of the list.
   F_fragList newEntry = F_FragList(frag, frags);
   frags = newEntry;
+}
+
+Tr_exp Tr_stringExp(string val) {
+  Temp_label stringLabel = Temp_newlabel();
+  F_frag stringFrag = F_StringFrag(stringLabel, val);
+  Tr_pushFrag(stringFrag);
+  return Tr_Ex(T_Name(stringLabel));
+}
+
+Tr_exp Tr_callExp(Temp_label functionLabel, Tr_expList args) {
+  // TODO: Pass in the static link?
+  T_expList convertedHead = NULL, convertedTail = NULL;
+  while (args) {
+    T_expList convertedArg = T_ExpList(unEx(args->head), NULL);
+    if (convertedHead)
+      convertedTail->tail = convertedArg;
+    else
+      convertedHead = convertedArg;
+    args = args->tail;
+  }
+  return Tr_Ex(T_Call(T_Name(functionLabel), convertedHead));
+}
+
+Tr_exp Tr_binOpExp(A_oper op, Tr_exp left, Tr_exp right) {
+  T_binOp binOp;
+  switch (op) {
+  case A_plusOp:
+    binOp = T_plus;
+    break;
+  case A_minusOp:
+    binOp = T_minus;
+    break;
+  case A_timesOp:
+    binOp = T_mul;
+    break;
+  case A_divideOp:
+    binOp = T_div;
+    break;
+  default:
+    assert(0);
+    return NULL;
+  }
+  return Tr_Ex(T_Binop(binOp, unEx(left), unEx(right)));
 }
 
 void Tr_procEntryExit(Tr_level level, Tr_exp body, Tr_accessList formals) {
