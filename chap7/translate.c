@@ -310,6 +310,37 @@ Tr_exp Tr_binOpExp(A_oper op, Tr_exp left, Tr_exp right) {
   return Tr_Ex(T_Binop(binOp, unEx(left), unEx(right)));
 }
 
+Tr_exp Tr_relOpExp(A_oper op, Tr_exp left, Tr_exp right) {
+  T_relOp relOp;
+  switch (op) {
+  case A_eqOp:
+    relOp = T_eq;
+    break;
+  case A_neqOp:
+    relOp = T_ne;
+    break;
+  case A_ltOp:
+    relOp = T_lt;
+    break;
+  case A_leOp:
+    relOp = T_le;
+    break;
+  case A_gtOp:
+    relOp = T_gt;
+    break;
+  case A_geOp:
+    relOp = T_ge;
+    break;
+  default:
+    assert(0);
+    return NULL;
+  }
+  T_stm cond = T_Cjump(relOp, unEx(left), unEx(right), NULL, NULL);
+  patchList trues = PatchList(&cond->u.CJUMP.false, NULL);
+  patchList falses = PatchList(&cond->u.CJUMP.true, NULL);
+  return Tr_Cx(trues, falses, cond);
+}
+
 void Tr_procEntryExit(Tr_level level, Tr_exp body, Tr_accessList formals) {
   T_stm stm = unNx(body);
   F_frame f = level->frame;

@@ -180,7 +180,7 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
     case A_leOp:
     case A_gtOp:
     case A_geOp:
-      return expTy(NULL, Ty_Int());
+      return expTy(Tr_relOpExp(oper, left.exp, right.exp), Ty_Int());
     default:
       EM_error(a->pos, "unknown oper");
       return expTy(NULL, Ty_Int());
