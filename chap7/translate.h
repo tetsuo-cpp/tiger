@@ -32,6 +32,11 @@ Tr_exp Tr_stringExp(string);
 Tr_exp Tr_callExp(Temp_label, Tr_expList);
 Tr_exp Tr_binOpExp(A_oper, Tr_exp, Tr_exp);
 Tr_exp Tr_relOpExp(A_oper, Tr_exp, Tr_exp);
+Tr_exp Tr_seqExp(Tr_expList);
+Tr_exp Tr_assignExp(Tr_exp, Tr_exp);
+Tr_exp Tr_ifThenElseExp(Tr_exp, Tr_exp, Tr_exp);
+Tr_exp Tr_whileExp(Tr_exp, Tr_exp);
+Tr_exp Tr_forExp(Tr_exp, Tr_exp, Tr_exp);
 
 void Tr_procEntryExit(Tr_level level, Tr_exp body, Tr_accessList formals);
 F_fragList Tr_getResult(void);

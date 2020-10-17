@@ -341,6 +341,69 @@ Tr_exp Tr_relOpExp(A_oper op, Tr_exp left, Tr_exp right) {
   return Tr_Cx(trues, falses, cond);
 }
 
+Tr_exp Tr_seqExp(Tr_expList expList) {
+  T_exp convertedHead = NULL, convertedTail = NULL;
+  while (expList) {
+    T_exp convertedNode = T_Eseq(unNx(expList->head), NULL);
+    expList = expList->tail;
+    if (convertedHead)
+      convertedTail->u.ESEQ.exp = convertedNode;
+    else
+      convertedHead = convertedNode;
+    convertedTail = convertedNode;
+  }
+  return Tr_Ex(convertedHead);
+}
+
+Tr_exp Tr_assignExp(Tr_exp left, Tr_exp right) {
+  T_exp assignMem = T_Mem(unEx(left));
+  return Tr_Nx(T_Move(assignMem, unEx(right)));
+}
+
+Tr_exp Tr_ifThenElseExp(Tr_exp condExp, Tr_exp thenExp, Tr_exp elseExp) {
+  struct Cx c = unCx(condExp);
+  T_exp t = unEx(thenExp), e = unEx(elseExp);
+  Temp_label trueLabel = Temp_newlabel(), falseLabel = Temp_newlabel(),
+             joinLabel = Temp_newlabel();
+  Temp_temp r = Temp_newtemp();
+  T_stm seq =
+      T_Seq(c.stm, T_Seq(T_Label(trueLabel),
+                         T_Seq(T_Move(T_Temp(r), t),
+                               T_Seq(T_Jump(T_Name(joinLabel),
+                                            Temp_LabelList(joinLabel, NULL)),
+                                     T_Seq(T_Label(falseLabel),
+                                           T_Seq(T_Move(T_Temp(r), e),
+                                                 T_Seq(T_Label(joinLabel),
+                                                       T_Exp(T_Temp(r)))))))));
+  return Tr_Nx(seq);
+}
+
+Tr_exp Tr_whileExp(Tr_exp condExp, Tr_exp bodyExp) {
+  struct Cx c = unCx(condExp);
+  T_exp b = unEx(bodyExp);
+  Temp_label condLabel = Temp_newlabel(), trueLabel = Temp_newlabel(),
+             falseLabel = Temp_newlabel();
+  T_stm seq = T_Seq(
+      T_Label(condLabel),
+      T_Seq(c.stm, T_Seq(T_Label(trueLabel),
+                         T_Seq(T_Exp(b), T_Seq(T_Label(falseLabel), NULL)))));
+  return Tr_Nx(seq);
+}
+
+Tr_exp Tr_forExp(Tr_exp lowExp, Tr_exp highExp, Tr_exp bodyExp) {
+  Temp_temp counter = Temp_newtemp();
+  T_exp low = unEx(lowExp), high = unEx(highExp), body = unEx(bodyExp);
+  T_stm condStm = T_Cjump(T_lt, T_Temp(counter), high, NULL, NULL);
+  Temp_label trueLabel = Temp_newlabel(), falseLabel = Temp_newlabel();
+
+  // Put together the loop.
+  T_stm seq =
+      T_Seq(T_Move(T_Temp(counter), low),
+            T_Seq(condStm, T_Seq(T_Label(trueLabel),
+                                 T_Seq(T_Exp(body), T_Label(falseLabel)))));
+  return Tr_Nx(seq);
+}
+
 void Tr_procEntryExit(Tr_level level, Tr_exp body, Tr_accessList formals) {
   T_stm stm = unNx(body);
   F_frame f = level->frame;

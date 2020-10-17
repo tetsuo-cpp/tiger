@@ -204,11 +204,22 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
   case A_seqExp: {
     A_expList currentExp = a->u.seq;
     Ty_ty currentExpType = NULL;
+    Tr_expList headIR = NULL, tailIR = NULL;
     while (currentExp) {
-      currentExpType = transExp(level, venv, tenv, currentExp->head).ty;
+      struct expty exp = transExp(level, venv, tenv, currentExp->head);
+      currentExpType = exp.ty;
       currentExp = currentExp->tail;
+
+      // Add to the IR expressions.
+      Tr_expList newIR = Tr_ExpList(exp.exp, NULL);
+      if (headIR)
+        tailIR->tail = newIR;
+      else
+        headIR = newIR;
+      tailIR = newIR;
     }
-    return expTy(NULL, currentExpType ? currentExpType : Ty_Void());
+    Tr_exp seqExp = Tr_seqExp(headIR);
+    return expTy(seqExp, currentExpType ? currentExpType : Ty_Void());
   }
   case A_assignExp: {
     // Check that the types match up.
@@ -217,7 +228,8 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
     if (lhs.ty != rhs.ty)
       EM_error(a->pos, "type error in assignment");
     // Assignments don't evaluate to anything.
-    return expTy(NULL, Ty_Void());
+    Tr_exp assignExp = Tr_assignExp(lhs.exp, rhs.exp);
+    return expTy(assignExp, Ty_Void());
   }
   case A_ifExp: {
     struct expty condType = transExp(level, venv, tenv, a->u.iff.test);
@@ -236,10 +248,14 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
       if (thenType.ty != elseType.ty)
         EM_error(a->pos, "if expression has then and else blocks that evaluate "
                          "to different types");
-      else
-        return expTy(NULL, thenType.ty);
+      else {
+        Tr_exp ifExp =
+            Tr_ifThenElseExp(condType.exp, thenType.exp, elseType.exp);
+        return expTy(ifExp, thenType.ty);
+      }
     }
-    return expTy(NULL, Ty_Void());
+    Tr_exp ifExp = Tr_ifThenElseExp(condType.exp, thenType.exp, NULL);
+    return expTy(ifExp, Ty_Void());
   }
   case A_whileExp: {
     struct expty condType = transExp(level, venv, tenv, a->u.whilee.test);
@@ -250,7 +266,8 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
     struct expty bodyType = transExp(level, venv, tenv, a->u.whilee.body);
     if (bodyType.ty->kind != Ty_void)
       EM_error(a->pos, "while expression contains a non-void body expression");
-    return expTy(NULL, Ty_Int());
+    Tr_exp whileExp = Tr_whileExp(condType.exp, bodyType.exp);
+    return expTy(whileExp, Ty_Int());
   }
   case A_forExp: {
     Tr_access local = Tr_allocLocal(level, true);
@@ -266,7 +283,8 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
     if (bodyType.ty->kind != Ty_void)
       EM_error(a->pos, "body of for expression has non-void type");
     S_endScope(venv);
-    return expTy(NULL, Ty_Void());
+    Tr_exp forExp = Tr_forExp(lowType.exp, highType.exp, bodyType.exp);
+    return expTy(forExp, Ty_Void());
   }
   case A_breakExp: {
     // Check that we're nested within a loop here.
