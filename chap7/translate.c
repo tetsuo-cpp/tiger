@@ -375,6 +375,8 @@ Tr_exp Tr_ifThenElseExp(Tr_exp condExp, Tr_exp thenExp, Tr_exp elseExp) {
                                            T_Seq(T_Move(T_Temp(r), e),
                                                  T_Seq(T_Label(joinLabel),
                                                        T_Exp(T_Temp(r)))))))));
+  doPatch(c.trues, trueLabel);
+  doPatch(c.falses, falseLabel);
   return Tr_Nx(seq);
 }
 
