@@ -373,6 +373,13 @@ Tr_exp Tr_assignExp(Tr_exp left, Tr_exp right) {
   return Tr_Nx(T_Move(assignMem, unEx(right)));
 }
 
+Tr_exp Tr_ifThenExp(Tr_exp condExp, Tr_exp thenExp, Tr_exp elseExp) {
+  if (elseExp)
+    return Tr_ifThenElseExp(condExp, thenExp, elseExp);
+  else
+    return Tr_ifThenNoElseExp(condExp, thenExp);
+}
+
 Tr_exp Tr_ifThenElseExp(Tr_exp condExp, Tr_exp thenExp, Tr_exp elseExp) {
   struct Cx c = unCx(condExp);
   T_exp t = unEx(thenExp), e = unEx(elseExp);
@@ -388,6 +395,18 @@ Tr_exp Tr_ifThenElseExp(Tr_exp condExp, Tr_exp thenExp, Tr_exp elseExp) {
                                            T_Seq(T_Move(T_Temp(r), e),
                                                  T_Seq(T_Label(joinLabel),
                                                        T_Exp(T_Temp(r)))))))));
+  doPatch(c.trues, trueLabel);
+  doPatch(c.falses, falseLabel);
+  return Tr_Nx(seq);
+}
+
+Tr_exp Tr_ifThenNoElseExp(Tr_exp condExp, Tr_exp thenExp) {
+  struct Cx c = unCx(condExp);
+  T_exp t = unEx(thenExp);
+  Temp_label trueLabel = Temp_newlabel(), falseLabel = Temp_newlabel();
+  T_stm seq =
+      T_Seq(c.stm, T_Seq(T_Label(trueLabel),
+                         T_Seq(T_Exp(t), T_Seq(T_Label(falseLabel), NULL))));
   doPatch(c.trues, trueLabel);
   doPatch(c.falses, falseLabel);
   return Tr_Nx(seq);

@@ -35,7 +35,9 @@ Tr_exp Tr_relOpExp(A_oper, Tr_exp, Tr_exp);
 Tr_exp Tr_relOpStringExp(A_oper, Tr_exp, Tr_exp);
 Tr_exp Tr_seqExp(Tr_expList);
 Tr_exp Tr_assignExp(Tr_exp, Tr_exp);
+Tr_exp Tr_ifThenExp(Tr_exp, Tr_exp, Tr_exp);
 Tr_exp Tr_ifThenElseExp(Tr_exp, Tr_exp, Tr_exp);
+Tr_exp Tr_ifThenNoElseExp(Tr_exp, Tr_exp);
 Tr_exp Tr_whileExp(Tr_exp, Tr_exp);
 Tr_exp Tr_forExp(Tr_exp, Tr_exp, Tr_exp);
 
