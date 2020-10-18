@@ -25,7 +25,6 @@ void parse(string fname) {
   if (absyn_root) {
     pr_exp(stdout, absyn_root, 0);
     F_fragList frags = SEM_transProg(absyn_root);
-    assert(frags);
     fprintf(stdout, "\nIR Tree:\n");
     while (frags) {
       F_frag f = frags->head;

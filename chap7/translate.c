@@ -387,22 +387,36 @@ Tr_exp Tr_whileExp(Tr_exp condExp, Tr_exp bodyExp) {
              falseLabel = Temp_newlabel();
   T_stm seq = T_Seq(
       T_Label(condLabel),
-      T_Seq(c.stm, T_Seq(T_Label(trueLabel),
-                         T_Seq(T_Exp(b), T_Seq(T_Label(falseLabel), NULL)))));
+      T_Seq(c.stm,
+            T_Seq(T_Label(trueLabel),
+                  T_Seq(T_Exp(b), T_Seq(T_Jump(T_Name(condLabel),
+                                               Temp_LabelList(condLabel, NULL)),
+                                        T_Seq(T_Label(falseLabel), NULL))))));
+  doPatch(c.trues, trueLabel);
+  doPatch(c.falses, falseLabel);
   return Tr_Nx(seq);
 }
 
 Tr_exp Tr_forExp(Tr_exp lowExp, Tr_exp highExp, Tr_exp bodyExp) {
   Temp_temp counter = Temp_newtemp();
   T_exp low = unEx(lowExp), high = unEx(highExp), body = unEx(bodyExp);
-  T_stm condStm = T_Cjump(T_lt, T_Temp(counter), high, NULL, NULL);
   Temp_label trueLabel = Temp_newlabel(), falseLabel = Temp_newlabel();
+
+  // Put together the cond.
+  T_stm condStm = T_Cjump(T_lt, T_Temp(counter), high, NULL, NULL);
+  patchList trues = PatchList(&condStm->u.CJUMP.false, NULL);
+  patchList falses = PatchList(&condStm->u.CJUMP.true, NULL);
+  struct Cx c = unCx(Tr_Cx(trues, falses, condStm));
 
   // Put together the loop.
   T_stm seq =
       T_Seq(T_Move(T_Temp(counter), low),
             T_Seq(condStm, T_Seq(T_Label(trueLabel),
                                  T_Seq(T_Exp(body), T_Label(falseLabel)))));
+
+  // Patch up the cond labels.
+  doPatch(trues, trueLabel);
+  doPatch(falses, falseLabel);
   return Tr_Nx(seq);
 }
 
