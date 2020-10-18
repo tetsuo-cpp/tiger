@@ -341,6 +341,19 @@ Tr_exp Tr_relOpExp(A_oper op, Tr_exp left, Tr_exp right) {
   return Tr_Cx(trues, falses, cond);
 }
 
+Tr_exp Tr_relOpStringExp(A_oper oper, Tr_exp left, Tr_exp right) {
+  assert(oper == T_eq || oper == T_ne);
+  T_expList args = T_ExpList(unEx(left), T_ExpList(unEx(right), NULL));
+  T_exp equals = F_externalCall("stringEqual", args);
+  if (oper == T_eq)
+    return Tr_Ex(equals);
+  else {
+    // If we're checking that it's NOT equal, we'll need to negate the result.
+    assert(oper == T_ne);
+    return Tr_Ex(T_Binop(T_minus, T_Const(1), equals));
+  }
+}
+
 Tr_exp Tr_seqExp(Tr_expList expList) {
   T_exp convertedHead = NULL, convertedTail = NULL;
   while (expList) {

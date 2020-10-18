@@ -163,24 +163,38 @@ struct expty transExp(Tr_level level, S_table venv, S_table tenv, A_exp a) {
     A_oper oper = a->u.op.oper;
     struct expty left = transExp(level, venv, tenv, a->u.op.left);
     struct expty right = transExp(level, venv, tenv, a->u.op.right);
-    if (left.ty->kind != Ty_int)
-      EM_error(a->u.op.left->pos, "integer required");
-    if (right.ty->kind != Ty_int)
-      EM_error(a->u.op.right->pos, "integer required");
     // Arithmetic operators.
     switch (oper) {
     case A_plusOp:
     case A_minusOp:
     case A_timesOp:
     case A_divideOp:
+      if (left.ty->kind != Ty_int)
+        EM_error(a->u.op.left->pos, "integer required");
+      if (right.ty->kind != Ty_int)
+        EM_error(a->u.op.right->pos, "integer required");
       return expTy(Tr_binOpExp(oper, left.exp, right.exp), Ty_Int());
-    case A_eqOp:
-    case A_neqOp:
     case A_ltOp:
     case A_leOp:
     case A_gtOp:
     case A_geOp:
-      return expTy(Tr_relOpExp(oper, left.exp, right.exp), Ty_Int());
+      if (left.ty->kind != Ty_int)
+        EM_error(a->u.op.left->pos, "integer required");
+      if (right.ty->kind != Ty_int)
+        EM_error(a->u.op.right->pos, "integer required");
+    case A_eqOp:
+    case A_neqOp:
+      if (left.ty->kind != right.ty->kind)
+        EM_error(a->u.op.left->pos, "mismatching types in eq/neq");
+      Tr_exp relOpExp = NULL;
+      if (left.ty->kind == Ty_int)
+        relOpExp = Tr_relOpExp(oper, left.exp, right.exp);
+      else if (left.ty->kind == Ty_string)
+        relOpExp = Tr_relOpStringExp(oper, left.exp, right.exp);
+      else
+        EM_error(a->u.op.left->pos, "non integer/string type in eq/neq");
+      assert(relOpExp);
+      return expTy(relOpExp, Ty_Int());
     default:
       EM_error(a->pos, "unknown oper");
       return expTy(NULL, Ty_Int());
